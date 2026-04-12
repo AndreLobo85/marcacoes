@@ -27,6 +27,8 @@ import {
   Menu,
   LayoutDashboard,
   UserCircle,
+  BarChart3,
+  ShieldCheck,
 } from 'lucide-react'
 import { NewBookingButton } from './new-booking-button'
 import { cn } from '@/lib/utils'
@@ -41,10 +43,12 @@ const navItems = [
   { href: '/dashboard', label: 'HOME', icon: LayoutDashboard },
   { href: '/dashboard/calendar', label: 'CALENDAR', icon: CalendarDays },
   { href: '/dashboard/bookings', label: 'MARCAÇÕES', icon: CalendarCheck },
+  { href: '/dashboard/analytics', label: 'ANALYTICS', icon: BarChart3 },
   { href: '/dashboard/services', label: 'SERVICES', icon: Scissors },
   { href: '/dashboard/professionals', label: 'STAFF', icon: Users },
   { href: '/dashboard/customers', label: 'CLIENTS', icon: UserCircle },
   { href: '/dashboard/schedule', label: 'HORÁRIOS', icon: Clock },
+  { href: '/dashboard/team', label: 'TEAM ACCESS', icon: ShieldCheck },
   { href: '/dashboard/settings', label: 'SETTINGS', icon: Settings },
 ]
 
