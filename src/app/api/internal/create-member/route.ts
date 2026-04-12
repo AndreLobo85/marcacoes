@@ -36,10 +36,10 @@ export async function POST(request: NextRequest) {
     .eq('is_active', true)
     .single()
 
-  if (!member || member.role !== 'owner') {
+  if (!member || !['owner', 'manager'].includes(member.role)) {
     const { data: adminCheck } = await supabase.from('super_admins').select('id').eq('user_id', user.id).single()
     if (!adminCheck) {
-      return NextResponse.json({ error: 'Apenas o owner pode criar membros' }, { status: 403 })
+      return NextResponse.json({ error: 'Apenas owners e managers podem criar membros' }, { status: 403 })
     }
   }
 
