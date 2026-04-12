@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 /**
  * POST /api/internal/create-member
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Password deve ter pelo menos 6 caracteres' }, { status: 400 })
   }
 
-  // Verify user is owner of this business
+  // Verify user is owner of this business or super admin
   const { data: member } = await supabase
     .from('business_members')
     .select('role')
@@ -36,52 +37,40 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (!member || member.role !== 'owner') {
-    // Also allow super admins
     const { data: adminCheck } = await supabase.from('super_admins').select('id').eq('user_id', user.id).single()
     if (!adminCheck) {
       return NextResponse.json({ error: 'Apenas o owner pode criar membros' }, { status: 403 })
     }
   }
 
-  // Create auth user — try admin client, fallback to signUp
+  // Use admin client for all operations
+  const admin = createAdminClient()
+
+  // Create or find auth user
   let newUserId: string | null = null
-  let adminClient: ReturnType<typeof import('@/lib/supabase/admin').createAdminClient> | null = null
 
-  try {
-    const { createAdminClient } = await import('@/lib/supabase/admin')
-    adminClient = createAdminClient()
+  // Check if user already exists
+  const { data: existingUsers } = await admin.auth.admin.listUsers()
+  const existingUser = existingUsers?.users?.find((u) => u.email === email)
 
-    const { data: existingUsers } = await adminClient.auth.admin.listUsers()
-    const existingUser = existingUsers?.users?.find((u) => u.email === email)
-
-    if (existingUser) {
-      newUserId = existingUser.id
-    } else {
-      const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
-        email, password, email_confirm: true, user_metadata: { full_name: name },
-      })
-      if (authError || !authData.user) throw new Error(authError?.message || 'Failed')
-      newUserId = authData.user.id
-    }
-  } catch {
-    // Fallback: signUp
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email, password, options: { data: { full_name: name } },
+  if (existingUser) {
+    newUserId = existingUser.id
+  } else {
+    const { data: authData, error: authError } = await admin.auth.admin.createUser({
+      email, password, email_confirm: true, user_metadata: { full_name: name },
     })
-    if (signUpError) {
-      return NextResponse.json({ error: signUpError.message }, { status: 500 })
+    if (authError || !authData.user) {
+      return NextResponse.json({ error: authError?.message || 'Erro ao criar utilizador' }, { status: 500 })
     }
-    newUserId = signUpData.user?.id || null
+    newUserId = authData.user.id
   }
 
   if (!newUserId) {
     return NextResponse.json({ error: 'Não foi possível criar o utilizador' }, { status: 500 })
   }
 
-  // Use admin client for DB insert to bypass RLS
-  const dbClient = adminClient || supabase
-
-  const { error: memberError } = await dbClient.from('business_members').insert({
+  // Insert into business_members using admin client (bypasses RLS)
+  const { error: memberError } = await admin.from('business_members').insert({
     business_id: businessId,
     user_id: newUserId,
     role,
