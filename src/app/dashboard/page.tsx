@@ -25,11 +25,21 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Super admins: always show selector unless they explicitly chose a business
+  const { data: adminCheck } = await supabase.from('super_admins').select('id').eq('user_id', user.id).single()
+  if (adminCheck) {
+    // Check if a business was explicitly selected (via cookie)
+    let hasExplicitSelection = false
+    try {
+      const { cookies } = await import('next/headers')
+      const cookieStore = await cookies()
+      hasExplicitSelection = !!cookieStore.get('selected_business_id')?.value
+    } catch {}
+    if (!hasExplicitSelection) redirect('/dashboard/select-business')
+  }
+
   const business = await getUserBusiness(supabase)
   if (!business) {
-    // Check if super admin — redirect to business selector instead of onboarding
-    const { data: adminCheck } = await supabase.from('super_admins').select('id').eq('user_id', user.id).single()
-    if (adminCheck) redirect('/dashboard/select-business')
     // Check if has any memberships
     const { count } = await supabase.from('business_members').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
     if ((count || 0) > 0) redirect('/dashboard/select-business')
