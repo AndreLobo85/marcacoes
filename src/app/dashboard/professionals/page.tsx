@@ -13,7 +13,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Plus, Camera, X, CalendarCheck, Star, Clock } from 'lucide-react'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import { Plus, Camera, X, CalendarCheck, Star, Clock, Shield, ShieldCheck, Headset } from 'lucide-react'
 import { toast } from 'sonner'
 
 const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
@@ -31,7 +34,7 @@ export default function ProfessionalsPage() {
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<StaffProfile | null>(null)
-  const [form, setForm] = useState({ name: '', email: '', phone: '', color: COLORS[0], bio: '' })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', color: COLORS[0], bio: '', password: '', role: 'staff' as string })
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -83,7 +86,7 @@ export default function ProfessionalsPage() {
   // Dialog functions
   function openCreate() {
     setEditing(null)
-    setForm({ name: '', email: '', phone: '', color: COLORS[staff.length % COLORS.length], bio: '' })
+    setForm({ name: '', email: '', phone: '', color: COLORS[staff.length % COLORS.length], bio: '', password: '', role: 'staff' })
     setAvatarFile(null)
     setAvatarPreview(null)
     setDialogOpen(true)
@@ -91,7 +94,7 @@ export default function ProfessionalsPage() {
 
   function openEdit(p: StaffProfile) {
     setEditing(p)
-    setForm({ name: p.name, email: p.email || '', phone: p.phone || '', color: p.color, bio: p.bio || '' })
+    setForm({ name: p.name, email: p.email || '', phone: p.phone || '', color: p.color, bio: p.bio || '', password: '', role: 'staff' })
     setAvatarFile(null)
     setAvatarPreview(p.avatar_url || null)
     setDialogOpen(true)
@@ -141,6 +144,32 @@ export default function ProfessionalsPage() {
       if (error) { toast.error(error.message); setLoading(false); return }
       toast.success('Profissional atualizado')
     } else {
+      // Create user account via API
+      try {
+        const res = await fetch('/api/internal/create-member', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessId: business.id,
+            email: form.email,
+            password: form.password,
+            name: form.name,
+            role: form.role,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          toast.error(data.error || 'Erro ao criar membro')
+          setLoading(false)
+          return
+        }
+        payload.user_id = data.userId
+      } catch {
+        toast.error('Erro de rede ao criar membro')
+        setLoading(false)
+        return
+      }
+
       payload.business_id = business.id
       payload.sort_order = staff.length
       const { data: newStaff, error } = await supabase.from('staff_profiles').insert(payload).select('id').single()
@@ -150,7 +179,7 @@ export default function ProfessionalsPage() {
         if (url) await supabase.from('staff_profiles').update({ avatar_url: url }).eq('id', newStaff.id)
       }
       setSelectedId(newStaff.id)
-      toast.success('Profissional adicionado')
+      toast.success(`Membro ${form.name} criado! Login: ${form.email}`)
     }
 
     setDialogOpen(false)
@@ -367,66 +396,104 @@ export default function ProfessionalsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-serif">{editing ? 'Editar Profissional' : 'Novo Profissional'}</DialogTitle>
+            <DialogTitle className="font-serif">{editing ? 'Editar Profissional' : 'Novo Membro da Equipa'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Avatar upload */}
-            <div className="flex flex-col items-center gap-3">
-              <div className="relative group">
-                <Avatar className="h-24 w-24 border-2 border-border">
-                  {avatarPreview ? <AvatarImage src={avatarPreview} alt="Preview" className="object-cover" /> : null}
-                  <AvatarFallback style={{ backgroundColor: form.color, color: 'white' }} className="text-2xl font-bold">
-                    {form.name ? form.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : '?'}
-                  </AvatarFallback>
-                </Avatar>
-                <button type="button" onClick={() => fileInputRef.current?.click()}
-                  className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                  <Camera className="h-6 w-6 text-white" />
-                </button>
-                {avatarPreview && (
-                  <button type="button" onClick={clearAvatar}
-                    className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-white shadow-sm">
-                    <X className="h-3 w-3" />
+            {editing && (
+              /* Avatar upload — only when editing */
+              <div className="flex flex-col items-center gap-3">
+                <div className="relative group">
+                  <Avatar className="h-24 w-24 border-2 border-border">
+                    {avatarPreview ? <AvatarImage src={avatarPreview} alt="Preview" className="object-cover" /> : null}
+                    <AvatarFallback style={{ backgroundColor: form.color, color: 'white' }} className="text-2xl font-bold">
+                      {form.name ? form.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : '?'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <button type="button" onClick={() => fileInputRef.current?.click()}
+                    className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <Camera className="h-6 w-6 text-white" />
                   </button>
-                )}
+                  {avatarPreview && (
+                    <button type="button" onClick={clearAvatar}
+                      className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-white shadow-sm">
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="text-xs text-accent font-medium hover:underline underline-offset-2">
+                  {avatarPreview ? 'Alterar foto' : 'Adicionar foto'}
+                </button>
               </div>
-              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
-              <button type="button" onClick={() => fileInputRef.current?.click()} className="text-xs text-accent font-medium hover:underline underline-offset-2">
-                {avatarPreview ? 'Alterar foto' : 'Adicionar foto'}
-              </button>
-            </div>
+            )}
 
             <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider font-medium">Nome *</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className="bg-background" />
+              <Label className="text-xs uppercase tracking-wider font-medium">Nome Completo *</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className="bg-background" placeholder="Nome do colaborador" />
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider font-medium">Função / Bio</Label>
-              <Input value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} placeholder="Ex: Senior Master Stylist" className="bg-background" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider font-medium">Email</Label>
-                <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="bg-background" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider font-medium">Telefone</Label>
-                <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="bg-background" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider font-medium">Cor</Label>
-              <div className="flex gap-2">
-                {COLORS.map((c) => (
-                  <button key={c} type="button"
-                    className={`h-8 w-8 rounded-full border-2 transition-all ${form.color === c ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'}`}
-                    style={{ backgroundColor: c }} onClick={() => setForm({ ...form, color: c })} />
-                ))}
-              </div>
-            </div>
+
+            {!editing && (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider font-medium">Email *</Label>
+                  <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required className="bg-background" placeholder="colaborador@email.com" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider font-medium">Password Inicial *</Label>
+                  <Input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={6} className="bg-background" placeholder="Mínimo 6 caracteres" />
+                  <p className="text-[10px] text-muted-foreground">O colaborador pode alterar a password depois no seu perfil.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider font-medium">Role</Label>
+                  <Select value={form.role} onValueChange={(v) => v && setForm({ ...form, role: v })}>
+                    <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manager"><div className="flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5" /><span>Manager</span></div></SelectItem>
+                      <SelectItem value="staff"><div className="flex items-center gap-2"><Shield className="h-3.5 w-3.5" /><span>Colaborador</span></div></SelectItem>
+                      <SelectItem value="receptionist"><div className="flex items-center gap-2"><Headset className="h-3.5 w-3.5" /><span>Rececionista</span></div></SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="rounded-lg bg-secondary p-3">
+                  <p className="text-xs text-muted-foreground">
+                    {form.role === 'manager' ? 'Gestão operacional completa' : form.role === 'receptionist' ? 'Marcações e clientes' : 'Acesso à própria agenda'}
+                  </p>
+                </div>
+              </>
+            )}
+
+            {editing && (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider font-medium">Função / Bio</Label>
+                  <Input value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} placeholder="Ex: Senior Master Stylist" className="bg-background" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wider font-medium">Email</Label>
+                    <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="bg-background" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wider font-medium">Telefone</Label>
+                    <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="bg-background" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider font-medium">Cor</Label>
+                  <div className="flex gap-2">
+                    {COLORS.map((c) => (
+                      <button key={c} type="button"
+                        className={`h-8 w-8 rounded-full border-2 transition-all ${form.color === c ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'}`}
+                        style={{ backgroundColor: c }} onClick={() => setForm({ ...form, color: c })} />
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
             <DialogFooter>
               <Button type="submit" disabled={loading} className="uppercase tracking-wider text-xs">
-                {loading ? 'A guardar...' : editing ? 'Guardar' : 'Adicionar'}
+                {loading ? 'A guardar...' : editing ? 'Guardar' : 'Criar Membro'}
               </Button>
             </DialogFooter>
           </form>
