@@ -171,6 +171,9 @@ export default function ProfessionalsPage() {
         })
         if (roleErr) {
           toast.error('Erro ao alterar role: ' + roleErr.message)
+        } else {
+          // Update local state immediately
+          setMemberRoles((prev) => ({ ...prev, [editing.user_id!]: form.role }))
         }
       }
       toast.success('Profissional atualizado')
