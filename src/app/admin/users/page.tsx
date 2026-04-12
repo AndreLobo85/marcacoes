@@ -18,14 +18,14 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { Search, Shield, Building2, UserPlus, ShieldCheck, Headset, Crown } from 'lucide-react'
+import { Search, Shield, Building2, UserPlus, ShieldCheck, Headset, Crown, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface UserRow {
   id: string
   email: string
   name: string
-  memberships: Array<{ businessName: string; role: string }>
+  memberships: Array<{ businessId: string; businessName: string; role: string }>
   isSuperAdmin: boolean
   createdAt: string
 }
@@ -72,6 +72,7 @@ export default function AdminUsersPage() {
         createdAt: m.created_at,
       }
       existing.memberships.push({
+        businessId: m.business_id,
         businessName: bizMap.get(m.business_id) || 'Unknown',
         role: m.role,
       })
@@ -93,17 +94,37 @@ export default function AdminUsersPage() {
   useEffect(() => { loadData() }, [loadData])
 
   async function toggleSuperAdmin(userId: string, email: string, isCurrentlyAdmin: boolean) {
-    if (isCurrentlyAdmin) {
-      if (!confirm(`Remover super admin de ${email}?`)) return
-      const { error } = await supabase.from('super_admins').delete().eq('user_id', userId)
-      if (error) { toast.error(error.message); return }
-      toast.success('Super admin removido')
-    } else {
-      const { error } = await supabase.from('super_admins').insert({ user_id: userId, email })
-      if (error) { toast.error(error.message); return }
-      toast.success('Super admin adicionado')
+    if (isCurrentlyAdmin && !confirm(`Remover super admin de ${email}?`)) return
+    try {
+      const res = await fetch('/api/internal/toggle-super-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, email, remove: isCurrentlyAdmin }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Erro'); return }
+      toast.success(isCurrentlyAdmin ? 'Super admin removido' : 'Super admin adicionado')
+      loadData()
+    } catch {
+      toast.error('Erro de rede')
     }
-    loadData()
+  }
+
+  async function removeMember(userId: string, businessId: string, businessName: string) {
+    if (!confirm(`Remover utilizador do negócio "${businessName}"?`)) return
+    try {
+      const res = await fetch('/api/internal/remove-member', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, businessId }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Erro'); return }
+      toast.success(`Removido de ${businessName}`)
+      loadData()
+    } catch {
+      toast.error('Erro de rede')
+    }
   }
 
   async function handleCreateUser(e: React.FormEvent) {
@@ -184,12 +205,19 @@ export default function AdminUsersPage() {
                   <TableCell>
                     <div className="flex flex-wrap gap-1.5">
                       {u.memberships.map((m, i) => (
-                        <div key={i} className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5">
+                        <div key={i} className="group flex items-center gap-1 rounded-full border border-border px-2 py-0.5">
                           <Building2 className="h-2.5 w-2.5 text-muted-foreground" />
                           <span className="text-[10px] font-medium">{m.businessName}</span>
                           <span className="text-[9px] font-bold uppercase" style={{ color: ROLE_COLORS[m.role] || '#78716C' }}>
                             {m.role}
                           </span>
+                          <button
+                            onClick={() => removeMember(u.id, m.businessId, m.businessName)}
+                            className="ml-0.5 hidden group-hover:inline-flex items-center justify-center h-3.5 w-3.5 rounded-full hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
+                            title="Remover do negócio"
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
                         </div>
                       ))}
                       {u.memberships.length === 0 && (
