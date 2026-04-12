@@ -209,10 +209,7 @@ export default function TeamPage() {
           <h1 className="font-serif text-3xl font-bold tracking-tight">Team & Permissions</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage team members, roles, and customize permissions.</p>
         </div>
-        <Button onClick={() => { setEditingMember(null); setDialogOpen(true) }} className="gap-2 bg-accent hover:bg-[#D4B87A] text-white uppercase tracking-wider text-xs">
-          <UserPlus className="h-4 w-4" />
-          Novo Membro
-        </Button>
+        {/* Button removed — members are created via Admin panel */}
       </div>
 
       {/* Members list */}
