@@ -30,6 +30,7 @@ export default function ProfessionalsPage() {
   const [staffServices, setStaffServices] = useState<StaffService[]>([])
   const [workingHours, setWorkingHours] = useState<StaffWorkingHours[]>([])
   const [bookingCounts, setBookingCounts] = useState<Record<string, number>>({})
+  const [memberRoles, setMemberRoles] = useState<Record<string, string>>({})
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -48,12 +49,13 @@ export default function ProfessionalsPage() {
     if (!biz) return
     setBusiness(biz)
 
-    const [{ data: staffData }, { data: svcData }, { data: ssData }, { data: whData }, { data: assignData }] = await Promise.all([
+    const [{ data: staffData }, { data: svcData }, { data: ssData }, { data: whData }, { data: assignData }, { data: bmData }] = await Promise.all([
       supabase.from('staff_profiles').select('*').eq('business_id', biz.id).order('sort_order'),
       supabase.from('services').select('*').eq('business_id', biz.id).eq('is_active', true),
       supabase.from('staff_services').select('*'),
       supabase.from('staff_working_hours').select('*').eq('business_id', biz.id).order('day_of_week'),
       supabase.from('booking_assignments').select('staff_id'),
+      supabase.from('business_members').select('user_id, role').eq('business_id', biz.id),
     ])
 
     const staffList = (staffData || []) as StaffProfile[]
@@ -69,12 +71,28 @@ export default function ProfessionalsPage() {
     }
     setBookingCounts(counts)
 
+    // Map user_id -> role from business_members
+    const roles: Record<string, string> = {}
+    for (const bm of (bmData || []) as { user_id: string; role: string }[]) {
+      roles[bm.user_id] = bm.role
+    }
+    setMemberRoles(roles)
+
     if (!selectedId && staffList.length > 0) {
       setSelectedId(staffList[0].id)
     }
   }, [supabase, selectedId])
 
   useEffect(() => { loadData() }, [loadData])
+
+  const getRoleLabel = (userId: string | null) => {
+    if (!userId) return 'Staff'
+    const r = memberRoles[userId]
+    if (r === 'owner') return 'Owner'
+    if (r === 'manager') return 'Manager'
+    if (r === 'receptionist') return 'Rececionista'
+    return 'Colaborador'
+  }
 
   const selected = staff.find((s) => s.id === selectedId)
   const selectedServices = staffServices
@@ -92,18 +110,8 @@ export default function ProfessionalsPage() {
     setDialogOpen(true)
   }
 
-  async function openEdit(p: StaffProfile) {
-    // Fetch current role from business_members
-    let currentRole = 'staff'
-    if (p.user_id) {
-      const { data: bm } = await supabase
-        .from('business_members')
-        .select('role')
-        .eq('user_id', p.user_id)
-        .eq('business_id', business?.id || '')
-        .maybeSingle()
-      if (bm?.role) currentRole = bm.role
-    }
+  function openEdit(p: StaffProfile) {
+    const currentRole = p.user_id ? (memberRoles[p.user_id] || 'staff') : 'staff'
     setEditing(p)
     setForm({ name: p.name, email: p.email || '', phone: p.phone || '', color: p.color, bio: p.bio || '', password: '', role: currentRole })
     setAvatarFile(null)
@@ -156,11 +164,14 @@ export default function ProfessionalsPage() {
 
       // Update role in business_members
       if (editing.user_id && business) {
-        await supabase
+        const { error: roleErr } = await supabase
           .from('business_members')
-          .update({ role: form.role })
+          .update({ role: form.role } as Record<string, unknown>)
           .eq('user_id', editing.user_id)
           .eq('business_id', business.id)
+        if (roleErr) {
+          toast.error('Erro ao alterar role: ' + roleErr.message)
+        }
       }
       toast.success('Profissional atualizado')
     } else {
@@ -270,7 +281,7 @@ export default function ProfessionalsPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm truncate">{p.name}</p>
                         <p className="text-[10px] uppercase tracking-wider text-accent font-medium truncate">
-                          {p.bio || 'Staff Member'}
+                          {getRoleLabel(p.user_id)}{p.bio ? ` · ${p.bio}` : ''}
                         </p>
                       </div>
                       <span className={`inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider ${
@@ -294,7 +305,7 @@ export default function ProfessionalsPage() {
                 <div className="flex-1">
                   <h2 className="font-serif text-3xl font-bold tracking-tight">{selected.name}</h2>
                   <p className="text-accent font-semibold text-sm mt-1 italic">
-                    {selected.bio || 'Staff Member'}
+                    {getRoleLabel(selected.user_id)}{selected.bio ? ` · ${selected.bio}` : ''}
                   </p>
 
                   {/* Stats */}
