@@ -36,6 +36,7 @@ import {
   CreditCard,
 } from 'lucide-react'
 import { NewBookingButton } from './new-booking-button'
+import { GlobalSearch } from './global-search'
 import { cn } from '@/lib/utils'
 
 interface DashboardShellProps {
@@ -71,8 +72,13 @@ function NavContent({ pathname, business }: { pathname: string; business: Busine
         <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mt-0.5">Premium Tier</p>
       </div>
 
+      {/* Search */}
+      <div className="px-3 mt-3">
+        <GlobalSearch />
+      </div>
+
       {/* Nav */}
-      <nav className="flex flex-col gap-0.5 px-3 mt-4 flex-1">
+      <nav className="flex flex-col gap-0.5 px-3 mt-3 flex-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href
           return (

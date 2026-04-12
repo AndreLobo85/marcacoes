@@ -12,7 +12,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 export default function CalendarPage() {
   const [events, setEvents] = useState<EventInput[]>([])
+  const [allEvents, setAllEvents] = useState<EventInput[]>([])
   const [staffProfiles, setStaffProfiles] = useState<StaffProfile[]>([])
+  const [filterStaffId, setFilterStaffId] = useState<string>('all')
   const calendarRef = useRef<FullCalendar>(null)
 
   const supabase = createClient()
@@ -62,6 +64,7 @@ export default function CalendarPage() {
         backgroundColor: staffMember?.color || '#C4A265',
         borderColor: staffMember?.color || '#C4A265',
         extendedProps: {
+          staffId: a.staff_id,
           staff: staffMember?.name,
           service: bs.service_name,
           customer: customer?.name,
@@ -70,10 +73,20 @@ export default function CalendarPage() {
       }
     }).filter(Boolean) as EventInput[]
 
+    setAllEvents(calEvents)
     setEvents(calEvents)
   }, [supabase])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Filter events by staff
+  useEffect(() => {
+    if (filterStaffId === 'all') {
+      setEvents(allEvents)
+    } else {
+      setEvents(allEvents.filter((e) => e.extendedProps?.staffId === filterStaffId))
+    }
+  }, [filterStaffId, allEvents])
 
   return (
     <div className="space-y-6">
@@ -85,19 +98,34 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Staff legend */}
+      {/* Staff filter */}
       {staffProfiles.length > 0 && (
-        <div className="flex gap-4 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setFilterStaffId('all')}
+            className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all border ${
+              filterStaffId === 'all' ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:border-accent/40'
+            }`}
+          >
+            Todos
+          </button>
           {staffProfiles.map((p) => (
-            <div key={p.id} className="flex items-center gap-2">
-              <Avatar className="h-6 w-6 border border-border">
+            <button
+              key={p.id}
+              onClick={() => setFilterStaffId(p.id)}
+              className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all border ${
+                filterStaffId === p.id ? 'border-2 shadow-sm' : 'border-border hover:border-accent/40'
+              }`}
+              style={filterStaffId === p.id ? { borderColor: p.color, backgroundColor: p.color + '10' } : {}}
+            >
+              <Avatar className="h-5 w-5 border border-border">
                 {p.avatar_url ? <AvatarImage src={p.avatar_url} alt={p.name} className="object-cover" /> : null}
-                <AvatarFallback style={{ backgroundColor: p.color, color: 'white' }} className="text-[8px] font-bold">
+                <AvatarFallback style={{ backgroundColor: p.color, color: 'white' }} className="text-[7px] font-bold">
                   {p.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-xs font-medium">{p.name}</span>
-            </div>
+              {p.name}
+            </button>
           ))}
         </div>
       )}

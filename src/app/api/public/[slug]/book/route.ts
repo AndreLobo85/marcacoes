@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createBookingSchema } from '@/lib/modules/booking/validators'
 import { buildBookingAggregate, validateNoDoubleBooking } from '@/lib/modules/booking/service'
 import { buildNotificationPayload, signWebhookPayload } from '@/lib/modules/notification/service'
+import { rateLimit } from '@/lib/rate-limit'
 import type { Service, StaffProfile, BookingAssignment } from '@/types/database'
 
 export async function POST(
@@ -10,6 +11,13 @@ export async function POST(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await params
+
+  // Rate limit: 10 bookings per IP per minute
+  const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+  const { success: rateLimitOk } = rateLimit(`book:${ip}`, 10, 60_000)
+  if (!rateLimitOk) {
+    return NextResponse.json({ error: 'Demasiados pedidos. Tente novamente em breve.' }, { status: 429 })
+  }
 
   // Parse and validate body
   let body: unknown
@@ -28,6 +36,13 @@ export async function POST(
   }
 
   const input = parsed.data
+
+  // 0. Reject past dates
+  const bookingDate = new Date(`${input.date}T${input.startTime}:00Z`)
+  if (bookingDate < new Date()) {
+    return NextResponse.json({ error: 'Não é possível marcar para uma data/hora no passado' }, { status: 400 })
+  }
+
   const supabase = await createClient()
 
   // 1. Get business by slug

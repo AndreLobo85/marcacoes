@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { buildNotificationPayload, signWebhookPayload } from '@/lib/modules/notification/service'
+import { logAudit } from '@/lib/audit'
 import type { Booking, BookingService, BookingAssignment, StaffProfile, Customer, Business } from '@/types/database'
 
 /**
@@ -140,6 +141,16 @@ export async function POST(
       // Non-blocking
     })
   }
+
+  // 8. Audit log
+  await logAudit(supabase, {
+    businessId: booking.business_id,
+    userId: user.id,
+    action: 'booking_confirmed',
+    entityType: 'booking',
+    entityId: bookingId,
+    details: { customerName: cust.name },
+  })
 
   return NextResponse.json({ status: 'confirmed', bookingId })
 }

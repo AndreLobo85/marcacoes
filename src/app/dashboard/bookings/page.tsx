@@ -132,6 +132,7 @@ export default function BookingsPage() {
   useEffect(() => { loadData() }, [loadData])
 
   async function confirmBooking(bookingId: string) {
+    if (!confirm('Confirmar esta marcação? O cliente será notificado.')) return
     const res = await fetch(`/api/internal/bookings/${bookingId}/confirm`, { method: 'POST' })
     const data = await res.json()
     if (!res.ok) { toast.error(data.error || 'Erro ao aprovar'); return }
