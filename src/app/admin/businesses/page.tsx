@@ -142,11 +142,14 @@ export default function AdminBusinessesPage() {
                     {new Date(b.created_at).toLocaleDateString('pt-PT')}
                   </TableCell>
                   <TableCell>
-                    <a href={`/${b.slug}`} target="_blank">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs gap-1">
-                        <ExternalLink className="h-3 w-3" />Ver
-                      </Button>
-                    </a>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1"
+                      onClick={() => {
+                        localStorage.setItem('selected_business_id', b.id)
+                        document.cookie = `selected_business_id=${b.id};path=/;max-age=${60 * 60 * 24 * 30}`
+                        window.location.href = '/dashboard'
+                      }}>
+                      <ExternalLink className="h-3 w-3" />Administrar
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}

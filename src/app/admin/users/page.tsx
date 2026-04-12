@@ -17,6 +17,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Search, Shield, Building2, UserPlus, ShieldCheck, Headset, Crown } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -45,7 +46,7 @@ export default function AdminUsersPage() {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'staff', businessId: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'staff', businessId: '', makeSuperAdmin: true, linkToBusiness: false })
   const [creating, setCreating] = useState(false)
   const supabase = createClient()
 
@@ -107,18 +108,20 @@ export default function AdminUsersPage() {
 
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.email || !form.password || !form.name || !form.businessId) return
+    if (!form.email || !form.password || !form.name) return
+    if (form.linkToBusiness && !form.businessId) { toast.error('Selecione um negócio'); return }
     setCreating(true)
 
-    const res = await fetch('/api/internal/create-member', {
+    const res = await fetch('/api/internal/create-admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        businessId: form.businessId,
         email: form.email,
         password: form.password,
         name: form.name,
-        role: form.role,
+        makeSuperAdmin: form.makeSuperAdmin,
+        businessId: form.linkToBusiness ? form.businessId : undefined,
+        role: form.linkToBusiness ? form.role : undefined,
       }),
     })
 
@@ -128,7 +131,7 @@ export default function AdminUsersPage() {
     toast.success(`Utilizador ${form.name} criado! Login: ${form.email}`)
     setCreating(false)
     setDialogOpen(false)
-    setForm({ name: '', email: '', password: '', role: 'staff', businessId: '' })
+    setForm({ name: '', email: '', password: '', role: 'staff', businessId: '', makeSuperAdmin: true, linkToBusiness: false })
     loadData()
   }
 
@@ -144,7 +147,7 @@ export default function AdminUsersPage() {
           <h1 className="font-serif text-3xl font-bold tracking-tight">Utilizadores</h1>
           <p className="text-sm text-muted-foreground mt-1">Gerir todos os utilizadores da plataforma.</p>
         </div>
-        <Button onClick={() => { setForm({ name: '', email: '', password: '', role: 'staff', businessId: businesses[0]?.id || '' }); setDialogOpen(true) }}
+        <Button onClick={() => { setForm({ name: '', email: '', password: '', role: 'staff', businessId: '', makeSuperAdmin: true, linkToBusiness: false }); setDialogOpen(true) }}
           className="gap-2 bg-accent hover:bg-[#D4B87A] text-white uppercase tracking-wider text-xs">
           <UserPlus className="h-4 w-4" />
           Novo Utilizador
@@ -223,19 +226,6 @@ export default function AdminUsersPage() {
           </DialogHeader>
           <form onSubmit={handleCreateUser} className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider font-medium">Negócio *</Label>
-              <Select value={form.businessId} onValueChange={(v) => v && setForm({ ...form, businessId: v })}>
-                <SelectTrigger className="bg-background"><SelectValue placeholder="Selecionar negócio" /></SelectTrigger>
-                <SelectContent>
-                  {businesses.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      <div className="flex items-center gap-2"><Building2 className="h-3.5 w-3.5" />{b.name}</div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
               <Label className="text-xs uppercase tracking-wider font-medium">Nome Completo *</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className="bg-background" placeholder="Nome do utilizador" />
             </div>
@@ -248,18 +238,55 @@ export default function AdminUsersPage() {
               <Input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={6} className="bg-background" placeholder="Mínimo 6 caracteres" />
               <p className="text-[10px] text-muted-foreground">O utilizador pode alterar a password no seu perfil.</p>
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider font-medium">Role</Label>
-              <Select value={form.role} onValueChange={(v) => v && setForm({ ...form, role: v })}>
-                <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ROLE_OPTIONS.map((r) => {
-                    const RIcon = r.icon
-                    return <SelectItem key={r.value} value={r.value}><div className="flex items-center gap-2"><RIcon className="h-3.5 w-3.5" />{r.label}</div></SelectItem>
-                  })}
-                </SelectContent>
-              </Select>
+
+            {/* Super Admin toggle */}
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div>
+                <p className="text-sm font-medium flex items-center gap-1.5"><Shield className="h-3.5 w-3.5 text-accent" />Super Admin</p>
+                <p className="text-[10px] text-muted-foreground">Acesso total à plataforma e a todos os negócios.</p>
+              </div>
+              <Switch checked={form.makeSuperAdmin} onCheckedChange={(v) => setForm({ ...form, makeSuperAdmin: v })} />
             </div>
+
+            {/* Optional: link to business */}
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div>
+                <p className="text-sm font-medium flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />Associar a um negócio</p>
+                <p className="text-[10px] text-muted-foreground">Opcional — vincular este utilizador a um negócio específico.</p>
+              </div>
+              <Switch checked={form.linkToBusiness} onCheckedChange={(v) => setForm({ ...form, linkToBusiness: v })} />
+            </div>
+
+            {form.linkToBusiness && (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider font-medium">Negócio</Label>
+                  <Select value={form.businessId} onValueChange={(v) => v && setForm({ ...form, businessId: v })}>
+                    <SelectTrigger className="bg-background"><SelectValue placeholder="Selecionar negócio" /></SelectTrigger>
+                    <SelectContent>
+                      {businesses.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          <div className="flex items-center gap-2"><Building2 className="h-3.5 w-3.5" />{b.name}</div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider font-medium">Role no Negócio</Label>
+                  <Select value={form.role} onValueChange={(v) => v && setForm({ ...form, role: v })}>
+                    <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {ROLE_OPTIONS.map((r) => {
+                        const RIcon = r.icon
+                        return <SelectItem key={r.value} value={r.value}><div className="flex items-center gap-2"><RIcon className="h-3.5 w-3.5" />{r.label}</div></SelectItem>
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
             <DialogFooter>
               <Button type="submit" disabled={creating} className="uppercase tracking-wider text-xs w-full">
                 {creating ? 'A criar...' : 'Criar Utilizador'}
