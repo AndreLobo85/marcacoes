@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { BookingWizard } from '@/components/public/booking-wizard'
-import type { Business, Service, Professional } from '@/types/database'
+import type { Business, Service, StaffProfile, StaffService } from '@/types/database'
 import type { Metadata } from 'next'
 
 interface Props {
@@ -39,7 +39,7 @@ export default async function PublicBookingPage({ params }: Props) {
   const business = bizData as Business | null
   if (!business) notFound()
 
-  const [{ data: svcData }, { data: profData }] = await Promise.all([
+  const [{ data: svcData }, { data: staffData }, { data: ssData }] = await Promise.all([
     supabase
       .from('services')
       .select('*')
@@ -47,15 +47,26 @@ export default async function PublicBookingPage({ params }: Props) {
       .eq('is_active', true)
       .order('sort_order'),
     supabase
-      .from('professionals')
+      .from('staff_profiles')
       .select('*')
       .eq('business_id', business.id)
       .eq('is_active', true)
       .order('sort_order'),
+    supabase
+      .from('staff_services')
+      .select('*'),
   ])
 
   const services = (svcData || []) as Service[]
-  const professionals = (profData || []) as Professional[]
+  const staffProfiles = (staffData || []) as StaffProfile[]
+  const staffServices = (ssData || []) as StaffService[]
+
+  // Filter staff_services to only include relevant ones
+  const serviceIds = new Set(services.map((s) => s.id))
+  const staffIds = new Set(staffProfiles.map((s) => s.id))
+  const relevantSS = staffServices.filter(
+    (ss) => serviceIds.has(ss.service_id) && staffIds.has(ss.staff_id)
+  )
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -72,8 +83,9 @@ export default async function PublicBookingPage({ params }: Props) {
         <BookingWizard
           slug={slug}
           business={business}
-          services={services || []}
-          professionals={professionals || []}
+          services={services}
+          staff={staffProfiles}
+          staffServices={relevantSS}
         />
       </main>
     </div>

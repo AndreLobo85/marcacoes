@@ -1,4 +1,16 @@
-import type { WorkingHours, Break, Booking, TimeOff } from '@/types/database'
+import type { WorkingHours, Booking } from '@/types/database'
+
+// Legacy types used by this file only
+interface Break {
+  day_of_week: number
+  start_time: string
+  end_time: string
+}
+
+interface TimeOff {
+  start_date: string
+  end_date: string
+}
 
 export interface TimeSlot {
   start: string // HH:mm
@@ -53,7 +65,7 @@ export function getAvailableSlots(params: {
 
   const dayBookings = bookings.filter((b) => {
     if (b.status === 'cancelled') return false
-    const bStart = new Date(b.start_time)
+    const bStart = new Date(b.starts_at)
     return bStart >= dateStart && bStart <= dateEnd
   })
 
@@ -77,8 +89,8 @@ export function getAvailableSlots(params: {
 
       // Check booking overlap
       const overlapsBooking = dayBookings.some((b) => {
-        const bStart = new Date(b.start_time)
-        const bEnd = new Date(b.end_time)
+        const bStart = new Date(b.starts_at)
+        const bEnd = new Date(b.ends_at)
         const bookingStartMin = bStart.getHours() * 60 + bStart.getMinutes()
         const bookingEndMin = bEnd.getHours() * 60 + bEnd.getMinutes()
         return slotStart < bookingEndMin && slotEnd > bookingStartMin

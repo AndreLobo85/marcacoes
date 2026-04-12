@@ -7,11 +7,12 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import type { EventInput } from '@fullcalendar/core'
-import type { Professional, Booking, Service, Customer } from '@/types/database'
+import type { StaffProfile, Booking, BookingService, BookingAssignment, Customer } from '@/types/database'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 export default function CalendarPage() {
   const [events, setEvents] = useState<EventInput[]>([])
-  const [professionals, setProfessionals] = useState<Professional[]>([])
+  const [staffProfiles, setStaffProfiles] = useState<StaffProfile[]>([])
   const calendarRef = useRef<FullCalendar>(null)
 
   const supabase = createClient()
@@ -20,46 +21,54 @@ export default function CalendarPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { data: biz } = await supabase
-      .from('businesses')
-      .select('id')
-      .eq('owner_id', user.id)
-      .single()
+    const { data: biz } = await supabase.from('businesses').select('id').eq('owner_id', user.id).single()
     if (!biz) return
 
-    const [{ data: profs }, { data: bookings }, { data: services }, { data: customers }] = await Promise.all([
-      supabase.from('professionals').select('*').eq('business_id', biz.id).eq('is_active', true),
+    const [{ data: staffData }, { data: bookings }, { data: customers }] = await Promise.all([
+      supabase.from('staff_profiles').select('*').eq('business_id', biz.id).eq('is_active', true),
       supabase.from('bookings').select('*').eq('business_id', biz.id).neq('status', 'cancelled'),
-      supabase.from('services').select('*').eq('business_id', biz.id),
       supabase.from('customers').select('*').eq('business_id', biz.id),
     ])
 
-    setProfessionals(profs || [])
+    const staffList = (staffData || []) as StaffProfile[]
+    setStaffProfiles(staffList)
+    const staffMap = new Map(staffList.map((s) => [s.id, s]))
+    const customerMap = new Map((customers || []).map((c: Customer) => [c.id, c]))
 
-    const serviceMap = new Map((services || []).map(s => [s.id, s]))
-    const profMap = new Map((profs || []).map(p => [p.id, p]))
-    const customerMap = new Map((customers || []).map(c => [c.id, c]))
+    if (!bookings || bookings.length === 0) { setEvents([]); return }
+    const bookingIds = bookings.map((b: Booking) => b.id)
 
-    const calEvents: EventInput[] = (bookings || []).map((b) => {
-      const prof = profMap.get(b.professional_id)
-      const svc = serviceMap.get(b.service_id)
-      const cust = customerMap.get(b.customer_id)
+    const [{ data: bsData }, { data: assignData }] = await Promise.all([
+      supabase.from('booking_services').select('*').in('booking_id', bookingIds),
+      supabase.from('booking_assignments').select('*'),
+    ])
+
+    const bsMap = new Map<string, BookingService>()
+    for (const bs of (bsData || []) as BookingService[]) bsMap.set(bs.id, bs)
+    const bookingMap = new Map(bookings.map((b: Booking) => [b.id, b]))
+
+    const calEvents: EventInput[] = ((assignData || []) as BookingAssignment[]).map((a) => {
+      const bs = bsMap.get(a.booking_service_id)
+      if (!bs) return null
+      const booking = bookingMap.get(bs.booking_id)
+      const staffMember = staffMap.get(a.staff_id)
+      const customer = booking ? customerMap.get(booking.customer_id) : null
 
       return {
-        id: b.id,
-        title: `${cust?.name || 'Cliente'} — ${svc?.name || 'Serviço'}`,
-        start: b.start_time,
-        end: b.end_time,
-        backgroundColor: prof?.color || '#3b82f6',
-        borderColor: prof?.color || '#3b82f6',
+        id: a.id,
+        title: `${customer?.name || 'Cliente'} — ${bs.service_name}`,
+        start: a.starts_at,
+        end: a.ends_at,
+        backgroundColor: staffMember?.color || '#C4A265',
+        borderColor: staffMember?.color || '#C4A265',
         extendedProps: {
-          professional: prof?.name,
-          service: svc?.name,
-          customer: cust?.name,
-          status: b.status,
+          staff: staffMember?.name,
+          service: bs.service_name,
+          customer: customer?.name,
+          status: booking?.status,
         },
       }
-    })
+    }).filter(Boolean) as EventInput[]
 
     setEvents(calEvents)
   }, [supabase])
@@ -67,24 +76,34 @@ export default function CalendarPage() {
   useEffect(() => { loadData() }, [loadData])
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Calendário</h1>
-        <p className="text-muted-foreground">Visualiza todas as marcações</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="font-serif text-3xl font-bold tracking-tight">Calendar</h1>
+          <p className="text-sm text-muted-foreground mt-1">View and manage all appointments.</p>
+        </div>
       </div>
 
-      {professionals.length > 0 && (
-        <div className="flex gap-3 flex-wrap">
-          {professionals.map(p => (
-            <div key={p.id} className="flex items-center gap-1.5 text-sm">
-              <div className="h-3 w-3 rounded-full" style={{ backgroundColor: p.color }} />
-              {p.name}
+      {/* Staff legend */}
+      {staffProfiles.length > 0 && (
+        <div className="flex gap-4 flex-wrap">
+          {staffProfiles.map((p) => (
+            <div key={p.id} className="flex items-center gap-2">
+              <Avatar className="h-6 w-6 border border-border">
+                {p.avatar_url ? <AvatarImage src={p.avatar_url} alt={p.name} className="object-cover" /> : null}
+                <AvatarFallback style={{ backgroundColor: p.color, color: 'white' }} className="text-[8px] font-bold">
+                  {p.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-xs font-medium">{p.name}</span>
             </div>
           ))}
         </div>
       )}
 
-      <div className="bg-card rounded-lg border p-4">
+      {/* Calendar */}
+      <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -104,12 +123,7 @@ export default function CalendarPage() {
           nowIndicator
           eventDisplay="block"
           slotDuration="00:15:00"
-          buttonText={{
-            today: 'Hoje',
-            month: 'Mês',
-            week: 'Semana',
-            day: 'Dia',
-          }}
+          buttonText={{ today: 'Hoje', month: 'Mês', week: 'Semana', day: 'Dia' }}
         />
       </div>
     </div>

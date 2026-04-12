@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
 import type { Business } from '@/types/database'
-import { buttonVariants } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -17,8 +17,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import {
-  CalendarCheck,
   CalendarDays,
+  CalendarCheck,
   Users,
   Scissors,
   Clock,
@@ -27,6 +27,7 @@ import {
   Menu,
   LayoutDashboard,
   UserCircle,
+  Plus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -37,38 +38,60 @@ interface DashboardShellProps {
 }
 
 const navItems = [
-  { href: '/dashboard', label: 'Painel', icon: LayoutDashboard },
-  { href: '/dashboard/calendar', label: 'Calendário', icon: CalendarDays },
-  { href: '/dashboard/bookings', label: 'Marcações', icon: CalendarCheck },
-  { href: '/dashboard/professionals', label: 'Profissionais', icon: Users },
-  { href: '/dashboard/services', label: 'Serviços', icon: Scissors },
-  { href: '/dashboard/schedule', label: 'Horários', icon: Clock },
-  { href: '/dashboard/customers', label: 'Clientes', icon: UserCircle },
-  { href: '/dashboard/settings', label: 'Definições', icon: Settings },
+  { href: '/dashboard', label: 'HOME', icon: LayoutDashboard },
+  { href: '/dashboard/calendar', label: 'CALENDAR', icon: CalendarDays },
+  { href: '/dashboard/bookings', label: 'MARCAÇÕES', icon: CalendarCheck },
+  { href: '/dashboard/services', label: 'SERVICES', icon: Scissors },
+  { href: '/dashboard/professionals', label: 'STAFF', icon: Users },
+  { href: '/dashboard/schedule', label: 'HORÁRIOS', icon: Clock },
+  { href: '/dashboard/settings', label: 'SETTINGS', icon: Settings },
 ]
 
-function NavContent({ pathname }: { pathname: string }) {
+function NavContent({ pathname, business }: { pathname: string; business: Business | null }) {
   return (
-    <nav className="flex flex-col gap-1 px-3 py-4">
-      {navItems.map((item) => {
-        const isActive = pathname === item.href
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-              isActive
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            )}
-          >
-            <item.icon className="h-4 w-4" />
-            {item.label}
-          </Link>
-        )
-      })}
-    </nav>
+    <div className="flex flex-col h-full">
+      {/* Brand */}
+      <div className="px-5 pt-6 pb-2">
+        <h2 className="font-serif text-lg font-bold tracking-tight">{business?.name || 'Marcações'}</h2>
+        <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mt-0.5">Premium Tier</p>
+      </div>
+
+      {/* Nav */}
+      <nav className="flex flex-col gap-0.5 px-3 mt-4 flex-1">
+        {navItems.map((item) => {
+          const isActive = pathname === item.href
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-[11px] font-medium tracking-[0.08em] uppercase transition-all',
+                isActive
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              )}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </Link>
+          )
+        })}
+      </nav>
+
+      {/* New Appointment */}
+      <div className="px-3 pb-4">
+        <Link
+          href="/dashboard/bookings"
+          className={cn(
+            buttonVariants({ variant: 'outline' }),
+            'w-full justify-start gap-2 text-xs font-medium'
+          )}
+        >
+          <Plus className="h-4 w-4" />
+          Nova Marcação
+        </Link>
+      </div>
+    </div>
   )
 }
 
@@ -77,7 +100,8 @@ export function DashboardShell({ user, business, children }: DashboardShellProps
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const initials = (user.user_metadata?.full_name || user.email || 'U')
+  const displayName = user.user_metadata?.full_name || user.email || 'User'
+  const initials = displayName
     .split(' ')
     .map((n: string) => n[0])
     .join('')
@@ -92,36 +116,24 @@ export function DashboardShell({ user, business, children }: DashboardShellProps
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex md:w-64 md:flex-col border-r bg-card">
-        <div className="flex h-14 items-center gap-2 border-b px-4">
-          <CalendarCheck className="h-6 w-6 text-primary" />
-          <span className="font-semibold text-lg">
-            {business?.name || 'Marcações'}
-          </span>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <NavContent pathname={pathname} />
-        </div>
+      <aside className="hidden md:flex md:w-56 md:flex-col border-r border-border bg-card">
+        <NavContent pathname={pathname} business={business} />
       </aside>
 
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex h-14 items-center justify-between border-b bg-card px-4">
-          <div className="flex items-center gap-2">
+        <header className="flex h-14 items-center justify-between border-b border-border bg-card px-5">
+          <div className="flex items-center gap-3">
             {/* Mobile menu */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'md:hidden')}>
                 <Menu className="h-5 w-5" />
               </SheetTrigger>
-              <SheetContent side="left" className="w-64 p-0">
-                <div className="flex h-14 items-center gap-2 border-b px-4">
-                  <CalendarCheck className="h-6 w-6 text-primary" />
-                  <span className="font-semibold">Marcações</span>
-                </div>
-                <NavContent pathname={pathname} />
+              <SheetContent side="left" className="w-56 p-0">
+                <NavContent pathname={pathname} business={business} />
               </SheetContent>
             </Sheet>
 
@@ -129,7 +141,7 @@ export function DashboardShell({ user, business, children }: DashboardShellProps
               <Link
                 href={`/${business.slug}`}
                 target="_blank"
-                className="hidden sm:inline-flex text-xs text-muted-foreground hover:text-foreground"
+                className="hidden sm:inline-flex text-[11px] uppercase tracking-wider text-muted-foreground hover:text-accent transition-colors"
               >
                 Ver página pública →
               </Link>
@@ -137,15 +149,19 @@ export function DashboardShell({ user, business, children }: DashboardShellProps
           </div>
 
           <DropdownMenu>
-            <DropdownMenuTrigger className={cn(buttonVariants({ variant: 'ghost' }), 'gap-2')}>
-              <Avatar className="h-7 w-7">
-                <AvatarFallback className="text-xs">{initials}</AvatarFallback>
-              </Avatar>
-              <span className="hidden sm:inline text-sm">
-                {user.user_metadata?.full_name || user.email}
-              </span>
+            <DropdownMenuTrigger>
+              <div className="flex items-center gap-2.5 rounded-md px-3 py-1.5 hover:bg-muted transition-colors cursor-pointer">
+                <Avatar className="h-8 w-8 border border-border">
+                  <AvatarFallback className="text-xs font-medium bg-accent text-accent-foreground">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="hidden sm:inline text-sm font-medium">
+                  {displayName}
+                </span>
+              </div>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
                 <Settings className="mr-2 h-4 w-4" />
                 Definições
@@ -160,7 +176,7 @@ export function DashboardShell({ user, business, children }: DashboardShellProps
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto p-5 md:p-8">
           {children}
         </main>
       </div>

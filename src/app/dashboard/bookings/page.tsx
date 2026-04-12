@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Booking, Service, Professional, Customer } from '@/types/database'
+import type { Booking, BookingService, BookingAssignment, StaffProfile, Customer } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -32,15 +32,15 @@ const STATUS_LABELS: Record<string, { label: string; variant: 'default' | 'secon
 }
 
 interface EnrichedBooking extends Booking {
-  service_name: string
-  professional_name: string
+  servicesSummary: string
+  staffSummary: string
   customer_name: string
   customer_phone: string | null
 }
 
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<EnrichedBooking[]>([])
-  const [filter, setFilter] = useState<string>('upcoming')
+  const [filter, setFilter] = useState<string>('pending')
 
   const supabase = createClient()
 
@@ -59,38 +59,85 @@ export default function BookingsPage() {
       .from('bookings')
       .select('*')
       .eq('business_id', biz.id)
-      .order('start_time', { ascending: filter === 'upcoming' })
+      .order('starts_at', { ascending: filter === 'upcoming' })
 
-    if (filter === 'upcoming') {
-      query = query.gte('start_time', new Date().toISOString()).neq('status', 'cancelled')
+    if (filter === 'pending') {
+      query = query.eq('status', 'pending').order('starts_at', { ascending: true })
+    } else if (filter === 'upcoming') {
+      query = query.gte('starts_at', new Date().toISOString()).neq('status', 'cancelled')
     } else if (filter === 'today') {
       const today = new Date().toISOString().split('T')[0]
-      query = query.gte('start_time', today + 'T00:00:00').lt('start_time', today + 'T23:59:59')
+      query = query.gte('starts_at', today + 'T00:00:00').lt('starts_at', today + 'T23:59:59')
     } else if (filter === 'past') {
-      query = query.lt('start_time', new Date().toISOString())
+      query = query.lt('starts_at', new Date().toISOString())
     }
 
-    const [{ data: rawBookings }, { data: services }, { data: professionals }, { data: customers }] = await Promise.all([
-      query,
-      supabase.from('services').select('*').eq('business_id', biz.id),
-      supabase.from('professionals').select('*').eq('business_id', biz.id),
+    const { data: rawBookings } = await query
+    if (!rawBookings || rawBookings.length === 0) {
+      setBookings([])
+      return
+    }
+
+    const bookingIds = rawBookings.map((b) => b.id)
+
+    const [
+      { data: bookingServices },
+      { data: assignments },
+      { data: staffProfiles },
+      { data: customers },
+    ] = await Promise.all([
+      supabase.from('booking_services').select('*').in('booking_id', bookingIds),
+      supabase.from('booking_assignments').select('*'),
+      supabase.from('staff_profiles').select('*').eq('business_id', biz.id),
       supabase.from('customers').select('*').eq('business_id', biz.id),
     ])
 
-    const serviceMap = new Map((services || []).map(s => [s.id, s]))
-    const profMap = new Map((professionals || []).map(p => [p.id, p]))
-    const customerMap = new Map((customers || []).map(c => [c.id, c]))
+    const staffMap = new Map((staffProfiles || []).map((s: StaffProfile) => [s.id, s]))
+    const customerMap = new Map((customers || []).map((c: Customer) => [c.id, c]))
 
-    setBookings((rawBookings || []).map(b => ({
-      ...b,
-      service_name: serviceMap.get(b.service_id)?.name || '—',
-      professional_name: profMap.get(b.professional_id)?.name || '—',
-      customer_name: customerMap.get(b.customer_id)?.name || '—',
-      customer_phone: customerMap.get(b.customer_id)?.phone || null,
-    })))
+    // Group booking_services by booking_id
+    const bsMap = new Map<string, BookingService[]>()
+    for (const bs of (bookingServices || []) as BookingService[]) {
+      const list = bsMap.get(bs.booking_id) || []
+      list.push(bs)
+      bsMap.set(bs.booking_id, list)
+    }
+
+    // Map assignments by booking_service_id
+    const assignMap = new Map<string, BookingAssignment>()
+    for (const a of (assignments || []) as BookingAssignment[]) {
+      assignMap.set(a.booking_service_id, a)
+    }
+
+    setBookings(rawBookings.map((b) => {
+      const bServices = bsMap.get(b.id) || []
+      const serviceNames = bServices.map((bs) => bs.service_name)
+      const staffNames = bServices.map((bs) => {
+        const assign = assignMap.get(bs.id)
+        return assign ? staffMap.get(assign.staff_id)?.name || '—' : '—'
+      })
+
+      const customer = customerMap.get(b.customer_id)
+
+      return {
+        ...b,
+        servicesSummary: serviceNames.join(', ') || '—',
+        staffSummary: [...new Set(staffNames)].join(', ') || '—',
+        customer_name: customer?.name || '—',
+        customer_phone: customer?.phone || null,
+      } as EnrichedBooking
+    }))
   }, [supabase, filter])
 
   useEffect(() => { loadData() }, [loadData])
+
+  async function confirmBooking(bookingId: string) {
+    const res = await fetch(`/api/internal/bookings/${bookingId}/confirm`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) { toast.error(data.error || 'Erro ao aprovar'); return }
+    toast.success('Marcação aprovada — email de confirmação enviado ao cliente')
+    loadData()
+  }
 
   async function updateStatus(bookingId: string, status: string) {
     const update: Record<string, unknown> = { status }
@@ -108,18 +155,23 @@ export default function BookingsPage() {
       ' ' + d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
   }
 
+  function formatPrice(cents: number) {
+    return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(cents / 100)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Marcações</h1>
-          <p className="text-muted-foreground">Gere todas as marcações</p>
+          <h1 className="font-serif text-3xl font-bold tracking-tight">Appointments</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage all bookings and appointments.</p>
         </div>
         <Select value={filter} onValueChange={(v) => v && setFilter(v)}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="pending">Pendentes</SelectItem>
             <SelectItem value="today">Hoje</SelectItem>
             <SelectItem value="upcoming">Próximas</SelectItem>
             <SelectItem value="past">Passadas</SelectItem>
@@ -135,16 +187,18 @@ export default function BookingsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="rounded-lg border bg-card">
+        <Card>
+          <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Data/Hora</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Serviço</TableHead>
-                <TableHead>Profissional</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Ações</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="text-[10px] uppercase tracking-[0.15em] font-semibold">Data/Hora</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-[0.15em] font-semibold">Cliente</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-[0.15em] font-semibold">Serviços</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-[0.15em] font-semibold">Equipa</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-[0.15em] font-semibold">Total</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-[0.15em] font-semibold">Estado</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-[0.15em] font-semibold">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -153,7 +207,7 @@ export default function BookingsPage() {
                 return (
                   <TableRow key={b.id}>
                     <TableCell className="font-medium whitespace-nowrap">
-                      {formatDateTime(b.start_time)}
+                      {formatDateTime(b.starts_at)}
                     </TableCell>
                     <TableCell>
                       <div>{b.customer_name}</div>
@@ -161,38 +215,61 @@ export default function BookingsPage() {
                         <div className="text-xs text-muted-foreground">{b.customer_phone}</div>
                       )}
                     </TableCell>
-                    <TableCell>{b.service_name}</TableCell>
-                    <TableCell>{b.professional_name}</TableCell>
+                    <TableCell className="max-w-[200px] truncate">{b.servicesSummary}</TableCell>
+                    <TableCell>{b.staffSummary}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatPrice(b.total_price_cents)}</TableCell>
                     <TableCell>
                       <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
                     </TableCell>
                     <TableCell>
-                      {b.status === 'confirmed' && (
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => updateStatus(b.id, 'completed')}
-                          >
-                            Concluir
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive"
-                            onClick={() => updateStatus(b.id, 'cancelled')}
-                          >
-                            Cancelar
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex gap-1">
+                        {b.status === 'pending' && (
+                          <>
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => confirmBooking(b.id)}
+                            >
+                              Aprovar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive"
+                              onClick={() => updateStatus(b.id, 'cancelled')}
+                            >
+                              Rejeitar
+                            </Button>
+                          </>
+                        )}
+                        {b.status === 'confirmed' && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => updateStatus(b.id, 'completed')}
+                            >
+                              Concluir
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive"
+                              onClick={() => updateStatus(b.id, 'cancelled')}
+                            >
+                              Cancelar
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 )
               })}
             </TableBody>
           </Table>
-        </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   )

@@ -1,8 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import type { Business, Service, Professional } from '@/types/database'
-import type { TimeSlot } from '@/lib/availability'
+import { useState, useCallback } from 'react'
+import type { Business, Service, StaffProfile, StaffService } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,25 +9,55 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { CalendarCheck, Clock, Euro, ArrowLeft, Check } from 'lucide-react'
+import { CalendarCheck, Clock, ArrowLeft, Check, Plus, X } from 'lucide-react'
+
+// ── Types ──
 
 interface BookingWizardProps {
   slug: string
   business: Business
   services: Service[]
-  professionals: Professional[]
+  staff: StaffProfile[]
+  staffServices: StaffService[]
 }
 
-type Step = 'service' | 'professional' | 'datetime' | 'details' | 'success'
-
-function formatPrice(cents: number, currency = 'EUR') {
-  return new Intl.NumberFormat('pt-PT', { style: 'currency', currency }).format(cents / 100)
+interface SelectedItem {
+  service: Service
+  staff: StaffProfile
 }
 
-export function BookingWizard({ slug, services, professionals }: BookingWizardProps) {
-  const [step, setStep] = useState<Step>('service')
-  const [selectedService, setSelectedService] = useState<Service | null>(null)
-  const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null)
+interface TimeSlot {
+  start: string
+  end: string
+  staffId: string
+}
+
+type Step = 'services' | 'datetime' | 'details' | 'success'
+
+// ── Helpers ──
+
+function formatPrice(cents: number, currency = 'EUR', locale = 'pt') {
+  const resolvedLocale = locale === 'pt' ? 'pt-PT' : 'en-GB'
+  return new Intl.NumberFormat(resolvedLocale, { style: 'currency', currency }).format(cents / 100)
+}
+
+function getEligibleStaff(
+  serviceId: string,
+  staff: StaffProfile[],
+  staffServices: StaffService[]
+): StaffProfile[] {
+  const eligibleIds = staffServices
+    .filter((ss) => ss.service_id === serviceId)
+    .map((ss) => ss.staff_id)
+  return staff.filter((s) => eligibleIds.includes(s.id))
+}
+
+// ── Component ──
+
+export function BookingWizard({ slug, business, services, staff, staffServices }: BookingWizardProps) {
+  const [step, setStep] = useState<Step>('services')
+  const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
+  const [currentServiceId, setCurrentServiceId] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState('')
   const [slots, setSlots] = useState<TimeSlot[]>([])
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null)
@@ -36,30 +65,44 @@ export function BookingWizard({ slug, services, professionals }: BookingWizardPr
   const [customerForm, setCustomerForm] = useState({ name: '', email: '', phone: '', notes: '' })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [bookingResult, setBookingResult] = useState<{
+    startsAt: string
+    services: Array<{ serviceName: string; staffName: string; startsAt: string; endsAt: string }>
+  } | null>(null)
 
-  function selectService(s: Service) {
-    setSelectedService(s)
-    setStep('professional')
+  const totalPrice = selectedItems.reduce((sum, item) => sum + item.service.price_cents, 0)
+  const totalDuration = selectedItems.reduce((sum, item) => sum + item.service.duration_minutes, 0)
+
+  // Add a service+staff pair
+  function addItem(service: Service, staffMember: StaffProfile) {
+    setSelectedItems((prev) => [...prev, { service, staff: staffMember }])
+    setCurrentServiceId(null)
   }
 
-  function selectProfessional(p: Professional) {
-    setSelectedProfessional(p)
+  function removeItem(index: number) {
+    setSelectedItems((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  function proceedToDatetime() {
+    if (selectedItems.length === 0) return
     setStep('datetime')
   }
 
-  async function selectDate(date: string) {
-    if (!selectedService || !selectedProfessional) return
+  // Fetch availability for the first service's staff (others are sequential)
+  const fetchSlots = useCallback(async (date: string) => {
+    if (selectedItems.length === 0) return
     setSelectedDate(date)
     setLoadingSlots(true)
     setSelectedSlot(null)
 
+    const firstItem = selectedItems[0]
     const res = await fetch(
-      `/api/public/${slug}/availability?professional_id=${selectedProfessional.id}&service_id=${selectedService.id}&date=${date}`
+      `/api/public/${slug}/availability?staff_id=${firstItem.staff.id}&service_id=${firstItem.service.id}&date=${date}`
     )
     const data = await res.json()
     setSlots(data.slots || [])
     setLoadingSlots(false)
-  }
+  }, [selectedItems, slug])
 
   function selectSlot(slot: TimeSlot) {
     setSelectedSlot(slot)
@@ -68,23 +111,26 @@ export function BookingWizard({ slug, services, professionals }: BookingWizardPr
 
   async function handleBook(e: React.FormEvent) {
     e.preventDefault()
-    if (!selectedService || !selectedProfessional || !selectedSlot || !selectedDate) return
+    if (selectedItems.length === 0 || !selectedSlot || !selectedDate) return
     setSubmitting(true)
     setError(null)
-
-    const startTime = `${selectedDate}T${selectedSlot.start}:00`
 
     const res = await fetch(`/api/public/${slug}/book`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        professional_id: selectedProfessional.id,
-        service_id: selectedService.id,
-        start_time: startTime,
-        customer_name: customerForm.name,
-        customer_email: customerForm.email || null,
-        customer_phone: customerForm.phone || null,
-        notes: customerForm.notes || null,
+        businessId: business.id,
+        customerName: customerForm.name,
+        customerEmail: customerForm.email || null,
+        customerPhone: customerForm.phone || null,
+        services: selectedItems.map((item) => ({
+          serviceId: item.service.id,
+          staffId: item.staff.id,
+        })),
+        date: selectedDate,
+        startTime: selectedSlot.start,
+        notes: customerForm.notes || undefined,
+        timezone: business.timezone,
       }),
     })
 
@@ -96,13 +142,13 @@ export function BookingWizard({ slug, services, professionals }: BookingWizardPr
       return
     }
 
+    setBookingResult(data)
     setStep('success')
     setSubmitting(false)
   }
 
   function goBack() {
-    if (step === 'professional') setStep('service')
-    if (step === 'datetime') setStep('professional')
+    if (step === 'datetime') setStep('services')
     if (step === 'details') setStep('datetime')
   }
 
@@ -122,25 +168,39 @@ export function BookingWizard({ slug, services, professionals }: BookingWizardPr
 
     if (d.toDateString() === today.toDateString()) return 'Hoje'
     if (d.toDateString() === tomorrow.toDateString()) return 'Amanhã'
-
     return d.toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' })
   }
 
+  // ── Success ──
   if (step === 'success') {
     return (
       <Card className="text-center">
         <CardContent className="py-12">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-            <Check className="h-8 w-8 text-green-600" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
+            <Clock className="h-8 w-8 text-amber-600" />
           </div>
-          <h2 className="text-2xl font-bold mb-2">Marcação Confirmada!</h2>
+          <h2 className="text-2xl font-bold mb-2">Marcação Enviada!</h2>
+          <p className="text-sm text-amber-600 font-medium mb-4">
+            A aguardar confirmação do estabelecimento
+          </p>
+          <div className="text-muted-foreground mb-4 space-y-1 text-sm">
+            {bookingResult?.services.map((s, i) => (
+              <p key={i}>
+                {s.serviceName} com {s.staffName}
+              </p>
+            ))}
+          </div>
           <p className="text-muted-foreground mb-6">
-            A tua marcação de {selectedService?.name} com {selectedProfessional?.name} está confirmada
-            para {selectedDate && new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })} às {selectedSlot?.start}.
+            {selectedDate && new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-PT', {
+              weekday: 'long', day: 'numeric', month: 'long',
+            })} às {selectedSlot?.start}
+          </p>
+          <p className="font-semibold text-lg">
+            Total: {formatPrice(totalPrice, business.currency, business.locale)}
           </p>
           {customerForm.email && (
-            <p className="text-sm text-muted-foreground">
-              Enviámos uma confirmação para {customerForm.email}
+            <p className="text-sm text-muted-foreground mt-4">
+              Receberás um email em {customerForm.email} quando a marcação for confirmada.
             </p>
           )}
         </CardContent>
@@ -152,75 +212,138 @@ export function BookingWizard({ slug, services, professionals }: BookingWizardPr
     <div className="space-y-4">
       {/* Progress */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        {step !== 'service' && (
+        {step !== 'services' && (
           <Button variant="ghost" size="sm" onClick={goBack}>
             <ArrowLeft className="mr-1 h-4 w-4" />
             Voltar
           </Button>
         )}
         <span>
-          Passo {step === 'service' ? '1' : step === 'professional' ? '2' : step === 'datetime' ? '3' : '4'} de 4
+          Passo {step === 'services' ? '1' : step === 'datetime' ? '2' : '3'} de 3
         </span>
       </div>
 
-      {/* Step 1: Service */}
-      {step === 'service' && (
-        <div className="space-y-3">
-          <h2 className="text-xl font-semibold">Escolhe o Serviço</h2>
-          {services.map((s) => (
-            <Card
-              key={s.id}
-              className="cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => selectService(s)}
-            >
-              <CardContent className="flex items-center justify-between py-4">
-                <div>
-                  <p className="font-medium">{s.name}</p>
-                  {s.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-1">{s.description}</p>
-                  )}
-                  <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
-                      {s.duration_minutes} min
-                    </span>
-                  </div>
-                </div>
-                <Badge variant="secondary" className="text-base">
-                  {formatPrice(s.price_cents, s.currency)}
-                </Badge>
-              </CardContent>
-            </Card>
-          ))}
+      {/* Step 1: Select Services + Staff */}
+      {step === 'services' && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Escolhe os Serviços</h2>
+
+          {/* Selected items */}
+          {selectedItems.length > 0 && (
+            <div className="space-y-2">
+              {selectedItems.map((item, i) => (
+                <Card key={i} className="bg-primary/5 border-primary/20">
+                  <CardContent className="flex items-center justify-between py-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback style={{ backgroundColor: item.staff.color, color: 'white' }} className="text-xs">
+                          {item.staff.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-medium text-sm">{item.service.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.staff.name} · {item.service.duration_minutes} min · {formatPrice(item.service.price_cents, item.service.currency, business.locale)}
+                        </p>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => removeItem(i)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+
+              {/* Total bar */}
+              <div className="flex items-center justify-between rounded-lg bg-muted px-4 py-2 text-sm">
+                <span className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" /> {totalDuration} min
+                </span>
+                <span className="font-semibold">
+                  {formatPrice(totalPrice, business.currency, business.locale)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Service selection (if not picking staff for one) */}
+          {currentServiceId === null ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                {selectedItems.length === 0 ? 'Seleciona pelo menos um serviço:' : 'Adicionar outro serviço:'}
+              </p>
+              {services.map((s) => (
+                <Card
+                  key={s.id}
+                  className="cursor-pointer transition-colors hover:bg-muted/50"
+                  onClick={() => {
+                    const eligible = getEligibleStaff(s.id, staff, staffServices)
+                    if (eligible.length === 1) {
+                      addItem(s, eligible[0])
+                    } else {
+                      setCurrentServiceId(s.id)
+                    }
+                  }}
+                >
+                  <CardContent className="flex items-center justify-between py-3">
+                    <div>
+                      <p className="font-medium">{s.name}</p>
+                      {s.description && (
+                        <p className="text-sm text-muted-foreground line-clamp-1">{s.description}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        <Clock className="inline h-3 w-3 mr-1" />{s.duration_minutes} min
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">{formatPrice(s.price_cents, s.currency, business.locale)}</Badge>
+                      <Plus className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            /* Staff picker for the selected service */
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Escolhe o profissional para {services.find((s) => s.id === currentServiceId)?.name}:
+              </p>
+              {getEligibleStaff(currentServiceId, staff, staffServices).map((p) => (
+                <Card
+                  key={p.id}
+                  className="cursor-pointer transition-colors hover:bg-muted/50"
+                  onClick={() => {
+                    const service = services.find((s) => s.id === currentServiceId)!
+                    addItem(service, p)
+                  }}
+                >
+                  <CardContent className="flex items-center gap-3 py-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback style={{ backgroundColor: p.color, color: 'white' }} className="text-xs">
+                        {p.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <p className="font-medium">{p.name}</p>
+                  </CardContent>
+                </Card>
+              ))}
+              <Button variant="ghost" size="sm" onClick={() => setCurrentServiceId(null)}>
+                <ArrowLeft className="mr-1 h-4 w-4" /> Voltar aos serviços
+              </Button>
+            </div>
+          )}
+
+          {/* Continue button */}
+          {selectedItems.length > 0 && currentServiceId === null && (
+            <Button className="w-full" size="lg" onClick={proceedToDatetime}>
+              Continuar — {selectedItems.length} serviço{selectedItems.length > 1 ? 's' : ''}
+            </Button>
+          )}
         </div>
       )}
 
-      {/* Step 2: Professional */}
-      {step === 'professional' && (
-        <div className="space-y-3">
-          <h2 className="text-xl font-semibold">Escolhe o Profissional</h2>
-          {professionals.map((p) => (
-            <Card
-              key={p.id}
-              className="cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => selectProfessional(p)}
-            >
-              <CardContent className="flex items-center gap-3 py-4">
-                <Avatar>
-                  <AvatarFallback style={{ backgroundColor: p.color, color: 'white' }}>
-                    {p.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{p.name}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Step 3: Date & Time */}
+      {/* Step 2: Date & Time */}
       {step === 'datetime' && (
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Escolhe Data e Hora</h2>
@@ -232,7 +355,7 @@ export function BookingWizard({ slug, services, professionals }: BookingWizardPr
                 variant={selectedDate === d ? 'default' : 'outline'}
                 size="sm"
                 className="shrink-0"
-                onClick={() => selectDate(d)}
+                onClick={() => fetchSlots(d)}
               >
                 {formatDateLabel(d)}
               </Button>
@@ -263,7 +386,7 @@ export function BookingWizard({ slug, services, professionals }: BookingWizardPr
         </div>
       )}
 
-      {/* Step 4: Customer Details */}
+      {/* Step 3: Customer Details */}
       {step === 'details' && (
         <Card>
           <CardHeader>
@@ -271,11 +394,22 @@ export function BookingWizard({ slug, services, professionals }: BookingWizardPr
           </CardHeader>
           <CardContent>
             {/* Summary */}
-            <div className="mb-6 rounded-lg bg-muted/50 p-4 space-y-1 text-sm">
-              <p><strong>Serviço:</strong> {selectedService?.name} — {selectedService && formatPrice(selectedService.price_cents)}</p>
-              <p><strong>Profissional:</strong> {selectedProfessional?.name}</p>
-              <p><strong>Data:</strong> {selectedDate && new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-              <p><strong>Hora:</strong> {selectedSlot?.start} — {selectedSlot?.end}</p>
+            <div className="mb-6 rounded-lg bg-muted/50 p-4 space-y-2 text-sm">
+              {selectedItems.map((item, i) => (
+                <div key={i} className="flex justify-between">
+                  <span>{item.service.name} <span className="text-muted-foreground">com {item.staff.name}</span></span>
+                  <span>{formatPrice(item.service.price_cents, item.service.currency, business.locale)}</span>
+                </div>
+              ))}
+              <div className="border-t pt-2 flex justify-between font-semibold">
+                <span>Total ({totalDuration} min)</span>
+                <span>{formatPrice(totalPrice, business.currency, business.locale)}</span>
+              </div>
+              <p className="text-muted-foreground">
+                {selectedDate && new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-PT', {
+                  weekday: 'long', day: 'numeric', month: 'long',
+                })} às {selectedSlot?.start}
+              </p>
             </div>
 
             {error && (
