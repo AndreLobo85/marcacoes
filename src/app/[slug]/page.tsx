@@ -28,18 +28,21 @@ export default async function BookingPage({ params }: Props) {
   const business = bizData as Business | null
   if (!business) notFound()
 
-  const [{ data: svcData }, { data: staffData }, { data: ssData }] = await Promise.all([
+  const [{ data: svcData }, { data: staffData }] = await Promise.all([
     supabase.from('services').select('*').eq('business_id', business.id).eq('is_active', true).order('sort_order'),
     supabase.from('staff_profiles').select('*').eq('business_id', business.id).eq('is_active', true).order('sort_order'),
-    supabase.from('staff_services').select('*'),
   ])
 
   const services = (svcData || []) as Service[]
   const staffProfiles = (staffData || []) as StaffProfile[]
-  const staffServices = (ssData || []) as StaffService[]
-  const serviceIds = new Set(services.map((s) => s.id))
-  const staffIds = new Set(staffProfiles.map((s) => s.id))
-  const relevantSS = staffServices.filter((ss) => serviceIds.has(ss.service_id) && staffIds.has(ss.staff_id))
+
+  // Fetch staff_services scoped to this business's services and staff
+  const serviceIds = services.map((s) => s.id)
+  const staffIds = staffProfiles.map((s) => s.id)
+  const { data: ssData } = serviceIds.length > 0
+    ? await supabase.from('staff_services').select('*').in('service_id', serviceIds).in('staff_id', staffIds)
+    : { data: [] }
+  const relevantSS = (ssData || []) as StaffService[]
 
   return (
     <PublicBookingPage

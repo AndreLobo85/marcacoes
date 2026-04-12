@@ -21,11 +21,25 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // 2. Get booking
+  // 2. Verify user belongs to a business FIRST (auth before data access)
+  const { data: memberships } = await supabase
+    .from('business_members')
+    .select('business_id, role')
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+
+  if (!memberships || memberships.length === 0) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const memberBusinessIds = memberships.map((m) => m.business_id)
+
+  // 3. Get booking (only if it belongs to one of the user's businesses)
   const { data: booking } = await supabase
     .from('bookings')
     .select('*')
     .eq('id', bookingId)
+    .in('business_id', memberBusinessIds)
     .single()
 
   if (!booking) {
@@ -33,20 +47,7 @@ export async function POST(
   }
 
   if (booking.status !== 'pending') {
-    return NextResponse.json({ error: `Booking is already ${booking.status}` }, { status: 400 })
-  }
-
-  // 3. Verify user belongs to this business
-  const { data: member } = await supabase
-    .from('business_members')
-    .select('role')
-    .eq('business_id', booking.business_id)
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single()
-
-  if (!member) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    return NextResponse.json({ error: 'Booking is not pending' }, { status: 400 })
   }
 
   // 4. Update status to confirmed
@@ -59,12 +60,14 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to confirm booking' }, { status: 500 })
   }
 
-  // 5. Get business, customer, services for the notification
-  const [{ data: business }, { data: customer }, { data: bsData }, { data: assignData }, { data: staffData }] = await Promise.all([
+  // 5. Get business, customer, services for the notification (scoped queries)
+  const { data: bsData } = await supabase.from('booking_services').select('*').eq('booking_id', bookingId)
+  const bsIds = (bsData || []).map((bs: BookingService) => bs.id)
+
+  const [{ data: business }, { data: customer }, { data: assignData }, { data: staffData }] = await Promise.all([
     supabase.from('businesses').select('*').eq('id', booking.business_id).single(),
     supabase.from('customers').select('*').eq('id', booking.customer_id).single(),
-    supabase.from('booking_services').select('*').eq('booking_id', bookingId),
-    supabase.from('booking_assignments').select('*'),
+    supabase.from('booking_assignments').select('*').in('booking_service_id', bsIds.length > 0 ? bsIds : ['none']),
     supabase.from('staff_profiles').select('*').eq('business_id', booking.business_id),
   ])
 

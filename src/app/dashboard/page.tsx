@@ -42,18 +42,23 @@ export default async function DashboardPage() {
   const [
     { data: allBookings },
     { data: staffData },
-    { data: bsData },
-    { data: assignData },
     { data: customersData },
     { count: pendingCount },
   ] = await Promise.all([
     supabase.from('bookings').select('*').eq('business_id', business.id),
     supabase.from('staff_profiles').select('*').eq('business_id', business.id).eq('is_active', true).order('sort_order'),
-    supabase.from('booking_services').select('*'),
-    supabase.from('booking_assignments').select('*'),
     supabase.from('customers').select('*').eq('business_id', business.id),
     supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'pending'),
   ])
+
+  // Scoped: fetch booking_services and assignments only for this business's bookings
+  const bookingIds = (allBookings || []).map((b: Booking) => b.id)
+  const [{ data: bsData }, { data: assignData }] = bookingIds.length > 0 ? await Promise.all([
+    supabase.from('booking_services').select('*').in('booking_id', bookingIds),
+    supabase.from('booking_assignments').select('*').in('booking_service_id',
+      (await supabase.from('booking_services').select('id').in('booking_id', bookingIds)).data?.map((bs: { id: string }) => bs.id) || ['none']
+    ),
+  ]) : [{ data: [] }, { data: [] }]
 
   const bookings = (allBookings || []) as Booking[]
   const staff = (staffData || []) as StaffProfile[]

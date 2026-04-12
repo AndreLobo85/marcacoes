@@ -23,6 +23,10 @@ interface SelectedItem {
   staff: StaffProfile
 }
 
+function isSafeUrl(url: string): boolean {
+  try { const u = new URL(url); return u.protocol === 'https:' || u.protocol === 'http:' } catch { return false }
+}
+
 function formatPrice(cents: number, currency = 'EUR', locale = 'pt') {
   return new Intl.NumberFormat(locale === 'pt' ? 'pt-PT' : 'en-GB', { style: 'currency', currency }).format(cents / 100)
 }
@@ -71,11 +75,6 @@ export function PublicBookingPage({ slug, business, services, staff, staffServic
 
   function selectSpecialist(staffId: string) {
     setSelectedStaffId(staffId)
-    // Auto-select all services this staff can do if none selected
-    if (selectedItems.length === 0) {
-      const eligibleServices = staffServices.filter((ss) => ss.staff_id === staffId)
-      // Don't auto-add, just highlight
-    }
   }
 
   const fetchSlots = useCallback(async (date: string) => {
@@ -84,13 +83,18 @@ export function PublicBookingPage({ slug, business, services, staff, staffServic
     setLoadingSlots(true)
     setSelectedSlot(null)
 
-    const firstItem = selectedItems[0]
-    const res = await fetch(
-      `/api/public/${slug}/availability?staff_id=${firstItem.staff.id}&service_id=${firstItem.service.id}&date=${date}`
-    )
-    const data = await res.json()
-    setSlots(data.slots || [])
-    setLoadingSlots(false)
+    try {
+      const firstItem = selectedItems[0]
+      const res = await fetch(
+        `/api/public/${slug}/availability?staff_id=${firstItem.staff.id}&service_id=${firstItem.service.id}&date=${date}`
+      )
+      const data = await res.json()
+      setSlots(data.slots || [])
+    } catch {
+      setSlots([])
+    } finally {
+      setLoadingSlots(false)
+    }
   }, [selectedItems, slug])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -524,9 +528,9 @@ export function PublicBookingPage({ slug, business, services, staff, staffServic
           <div className="flex items-center justify-between">
             <p className="font-serif italic text-sm">{business.name}</p>
             <div className="flex gap-4 text-[10px] uppercase tracking-wider text-muted-foreground">
-              {business.social_facebook && <a href={business.social_facebook} target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">Facebook</a>}
-              {business.social_instagram && <a href={business.social_instagram} target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">Instagram</a>}
-              {business.social_website && <a href={business.social_website} target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">Website</a>}
+              {business.social_facebook && isSafeUrl(business.social_facebook) && <a href={business.social_facebook} target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">Facebook</a>}
+              {business.social_instagram && isSafeUrl(business.social_instagram) && <a href={business.social_instagram} target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">Instagram</a>}
+              {business.social_website && isSafeUrl(business.social_website) && <a href={business.social_website} target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">Website</a>}
             </div>
           </div>
         </div>

@@ -37,12 +37,6 @@ export async function POST(
 
   const input = parsed.data
 
-  // 0. Reject past dates
-  const bookingDate = new Date(`${input.date}T${input.startTime}:00Z`)
-  if (bookingDate < new Date()) {
-    return NextResponse.json({ error: 'Não é possível marcar para uma data/hora no passado' }, { status: 400 })
-  }
-
   const supabase = await createClient()
 
   // 1. Get business by slug
@@ -58,6 +52,14 @@ export async function POST(
 
   if (business.id !== input.businessId) {
     return NextResponse.json({ error: 'Business ID mismatch' }, { status: 400 })
+  }
+
+  // 1b. Reject past dates (using UTC comparison — safe for most timezones within a day)
+  const bookingDateTime = new Date(`${input.date}T${input.startTime}:00.000Z`)
+  const now = new Date()
+  // Allow a 2-hour buffer to account for timezone differences
+  if (bookingDateTime.getTime() < now.getTime() - 2 * 60 * 60 * 1000) {
+    return NextResponse.json({ error: 'Não é possível marcar para uma data/hora no passado' }, { status: 400 })
   }
 
   // 2. Fetch services and staff for all requested items
@@ -272,6 +274,10 @@ export async function POST(
 
   if (assignErr) {
     await supabase.from('bookings').delete().eq('id', booking.id)
+    // Check if it's a double-booking constraint violation
+    if (assignErr.message?.includes('no_staff_overlap') || assignErr.code === '23P01') {
+      return NextResponse.json({ error: 'Slot no longer available — conflito de horário' }, { status: 409 })
+    }
     return NextResponse.json({ error: 'Failed to create assignments' }, { status: 500 })
   }
 
