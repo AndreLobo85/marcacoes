@@ -110,8 +110,18 @@ export default function ProfessionalsPage() {
     setDialogOpen(true)
   }
 
-  function openEdit(p: StaffProfile) {
-    const currentRole = p.user_id ? (memberRoles[p.user_id] || 'staff') : 'staff'
+  async function openEdit(p: StaffProfile) {
+    // Always fetch fresh role from DB to avoid stale state
+    let currentRole = 'staff'
+    if (p.user_id && business) {
+      const { data: bm } = await supabase
+        .from('business_members')
+        .select('role')
+        .eq('user_id', p.user_id)
+        .eq('business_id', business.id)
+        .maybeSingle()
+      if (bm?.role) currentRole = bm.role
+    }
     setEditing(p)
     setForm({ name: p.name, email: p.email || '', phone: p.phone || '', color: p.color, bio: p.bio || '', password: '', role: currentRole })
     setAvatarFile(null)
