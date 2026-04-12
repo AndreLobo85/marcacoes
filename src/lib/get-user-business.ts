@@ -1,16 +1,29 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Business } from '@/types/database'
+import { cookies } from 'next/headers'
 
 /**
- * Get the business for the current user.
- * Looks up via business_members (supports all roles, not just owner).
- * Falls back to businesses.owner_id for backwards compatibility.
+ * Server-side: get the business for the current user.
+ * Checks cookie 'selected_business_id' first (set by client via select-business page).
+ * Falls back to business_members, then owner_id.
  */
 export async function getUserBusiness(supabase: SupabaseClient): Promise<Business | null> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  // Try via business_members first (supports staff, manager, receptionist)
+  // Check if a specific business is selected via cookie
+  try {
+    const cookieStore = await cookies()
+    const selectedId = cookieStore.get('selected_business_id')?.value
+    if (selectedId) {
+      const { data: biz } = await supabase.from('businesses').select('*').eq('id', selectedId).single()
+      if (biz) return biz as Business
+    }
+  } catch {
+    // cookies() may throw in some contexts
+  }
+
+  // Try via business_members first
   const { data: membership } = await supabase
     .from('business_members')
     .select('business_id')
@@ -28,7 +41,7 @@ export async function getUserBusiness(supabase: SupabaseClient): Promise<Busines
     return (biz as Business) || null
   }
 
-  // Fallback: owner_id (for legacy or if business_members not populated)
+  // Fallback: owner_id
   const { data: biz } = await supabase
     .from('businesses')
     .select('*')

@@ -34,6 +34,7 @@ import {
   Megaphone,
   Puzzle,
   CreditCard,
+  Building2,
 } from 'lucide-react'
 import { NewBookingButton } from './new-booking-button'
 import { GlobalSearch } from './global-search'
@@ -101,10 +102,21 @@ function NavContent({ pathname, business }: { pathname: string; business: Busine
 
       {/* New Appointment */}
       {business && (
-        <div className="px-3 pb-4">
+        <div className="px-3 pb-2">
           <NewBookingButton business={business} variant="button" />
         </div>
       )}
+
+      {/* Switch business / Admin link */}
+      <div className="px-3 pb-4 space-y-1">
+        <Link
+          href="/dashboard/select-business"
+          className="flex items-center gap-3 rounded-lg px-3 py-2 text-[10px] font-medium tracking-[0.08em] uppercase text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
+        >
+          <Building2 className="h-3.5 w-3.5" />
+          Trocar Negócio
+        </Link>
+      </div>
     </div>
   )
 }

@@ -26,7 +26,15 @@ export default async function DashboardPage() {
   if (!user) redirect('/login')
 
   const business = await getUserBusiness(supabase)
-  if (!business) redirect('/dashboard/onboarding')
+  if (!business) {
+    // Check if super admin — redirect to business selector instead of onboarding
+    const { data: adminCheck } = await supabase.from('super_admins').select('id').eq('user_id', user.id).single()
+    if (adminCheck) redirect('/dashboard/select-business')
+    // Check if has any memberships
+    const { count } = await supabase.from('business_members').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
+    if ((count || 0) > 0) redirect('/dashboard/select-business')
+    redirect('/dashboard/onboarding')
+  }
 
   const today = new Date().toISOString().split('T')[0]
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
