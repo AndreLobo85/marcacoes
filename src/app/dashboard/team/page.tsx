@@ -78,7 +78,7 @@ export default function TeamPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingMember, setEditingMember] = useState<EnrichedMember | null>(null)
   const [editRole, setEditRole] = useState<MemberRole>('staff')
-  const [inviteForm, setInviteForm] = useState({ email: '', role: 'staff' as MemberRole })
+  const [inviteForm, setInviteForm] = useState({ email: '', password: '', name: '', role: 'staff' as MemberRole })
   const [loading, setLoading] = useState(false)
 
   const supabase = createClient()
@@ -153,37 +153,30 @@ export default function TeamPage() {
     loadData()
   }
 
-  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
-
-  async function handleInvite(e: React.FormEvent) {
+  async function handleCreateMember(e: React.FormEvent) {
     e.preventDefault()
     if (!business) return
     setLoading(true)
 
-    const existing = members.find((m) => m.email === inviteForm.email)
-    if (existing) {
-      toast.error('Este email já é membro')
-      setLoading(false)
-      return
-    }
-
-    // Call invite API to create token
-    const res = await fetch('/api/internal/invite', {
+    const res = await fetch('/api/internal/create-member', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         businessId: business.id,
         email: inviteForm.email,
+        password: inviteForm.password,
+        name: inviteForm.name,
         role: inviteForm.role,
       }),
     })
 
     const data = await res.json()
 
-    if (!res.ok) { toast.error(data.error || 'Erro ao convidar'); setLoading(false); return }
+    if (!res.ok) { toast.error(data.error || 'Erro ao criar membro'); setLoading(false); return }
 
-    setInviteUrl(data.inviteUrl)
-    toast.success(`Convite criado para ${inviteForm.email}`)
+    toast.success(`Membro ${inviteForm.name} criado com sucesso! Pode fazer login com ${inviteForm.email}`)
+    setDialogOpen(false)
+    setInviteForm({ email: '', password: '', name: '', role: 'staff' })
     setLoading(false)
     loadData()
   }
@@ -218,7 +211,7 @@ export default function TeamPage() {
         </div>
         <Button onClick={() => { setEditingMember(null); setDialogOpen(true) }} className="gap-2 bg-accent hover:bg-[#D4B87A] text-white uppercase tracking-wider text-xs">
           <UserPlus className="h-4 w-4" />
-          Invite Member
+          Novo Membro
         </Button>
       </div>
 
@@ -428,9 +421,19 @@ export default function TeamPage() {
       <Dialog open={dialogOpen && !editingMember} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-serif">Invite Team Member</DialogTitle>
+            <DialogTitle className="font-serif">Novo Membro da Equipa</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleInvite} className="space-y-4">
+          <form onSubmit={handleCreateMember} className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider font-medium">Nome Completo *</Label>
+              <Input
+                value={inviteForm.name}
+                onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                placeholder="Nome do colaborador"
+                required
+                className="bg-background"
+              />
+            </div>
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-wider font-medium">Email *</Label>
               <Input
@@ -441,6 +444,19 @@ export default function TeamPage() {
                 required
                 className="bg-background"
               />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider font-medium">Password Inicial *</Label>
+              <Input
+                type="text"
+                value={inviteForm.password}
+                onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
+                placeholder="Mínimo 6 caracteres"
+                required
+                minLength={6}
+                className="bg-background"
+              />
+              <p className="text-[10px] text-muted-foreground">O colaborador pode alterar a password depois no seu perfil.</p>
             </div>
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-wider font-medium">Role</Label>
@@ -456,25 +472,11 @@ export default function TeamPage() {
             <div className="rounded-lg bg-secondary p-3">
               <p className="text-xs text-muted-foreground">{ROLE_CONFIG[inviteForm.role].description}</p>
             </div>
-
-            {inviteUrl && (
-              <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 space-y-2">
-                <p className="text-xs font-semibold text-accent uppercase tracking-wider">Link de Convite Gerado</p>
-                <code className="block text-xs bg-white rounded px-3 py-2 break-all border border-border">{inviteUrl}</code>
-                <Button type="button" variant="outline" size="sm" className="text-xs w-full" onClick={() => { navigator.clipboard.writeText(inviteUrl); toast.success('Link copiado!') }}>
-                  Copiar Link
-                </Button>
-                <p className="text-[10px] text-muted-foreground">Partilhe este link com o colaborador. Expira em 7 dias.</p>
-              </div>
-            )}
-
-            {!inviteUrl && (
-              <DialogFooter>
-                <Button type="submit" disabled={loading} className="uppercase tracking-wider text-xs">
-                  {loading ? 'A criar convite...' : 'Criar Convite'}
-                </Button>
-              </DialogFooter>
-            )}
+            <DialogFooter>
+              <Button type="submit" disabled={loading} className="uppercase tracking-wider text-xs">
+                {loading ? 'A criar...' : 'Criar Membro'}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
