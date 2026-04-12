@@ -112,27 +112,32 @@ export default function AdminUsersPage() {
     if (form.linkToBusiness && !form.businessId) { toast.error('Selecione um negócio'); return }
     setCreating(true)
 
-    const res = await fetch('/api/internal/create-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: form.email,
-        password: form.password,
-        name: form.name,
-        makeSuperAdmin: form.makeSuperAdmin,
-        businessId: form.linkToBusiness ? form.businessId : undefined,
-        role: form.linkToBusiness ? form.role : undefined,
-      }),
-    })
+    try {
+      const res = await fetch('/api/internal/create-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password,
+          name: form.name,
+          makeSuperAdmin: form.makeSuperAdmin,
+          businessId: form.linkToBusiness ? form.businessId : undefined,
+          role: form.linkToBusiness ? form.role : undefined,
+        }),
+      })
 
-    const data = await res.json()
-    if (!res.ok) { toast.error(data.error || 'Erro ao criar'); setCreating(false); return }
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Erro ao criar'); return }
 
-    toast.success(`Utilizador ${form.name} criado! Login: ${form.email}`)
-    setCreating(false)
-    setDialogOpen(false)
-    setForm({ name: '', email: '', password: '', role: 'staff', businessId: '', makeSuperAdmin: true, linkToBusiness: false })
-    loadData()
+      toast.success(`Utilizador ${form.name} criado! Login: ${form.email}`)
+      setDialogOpen(false)
+      setForm({ name: '', email: '', password: '', role: 'staff', businessId: '', makeSuperAdmin: true, linkToBusiness: false })
+      loadData()
+    } catch (err) {
+      toast.error('Erro de rede ao criar utilizador')
+    } finally {
+      setCreating(false)
+    }
   }
 
   const filtered = users.filter((u) =>
