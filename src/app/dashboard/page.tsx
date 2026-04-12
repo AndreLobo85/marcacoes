@@ -3,9 +3,10 @@ import { redirect } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
-  CalendarCheck, Euro, UserPlus, Clock, AlertCircle, ArrowRight, MoreVertical, Bell, Scissors,
+  CalendarCheck, Euro, UserPlus, Clock, AlertCircle, ArrowRight, MoreVertical, Scissors,
 } from 'lucide-react'
 import Link from 'next/link'
+import { NewBookingButton } from '@/components/dashboard/new-booking-button'
 import type {
   Business, StaffProfile, Booking, BookingService, BookingAssignment, Customer,
 } from '@/types/database'
@@ -310,20 +311,8 @@ export default async function DashboardPage() {
               <p className="text-xs text-stone-400 mt-2 leading-relaxed">
                 Adicione marcações ou envie lembretes aos seus clientes recentes.
               </p>
-              <div className="mt-5 space-y-2.5">
-                <Link
-                  href="/dashboard/bookings"
-                  className="flex items-center justify-center gap-2 rounded-lg bg-accent hover:bg-gold-light px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-white transition-colors"
-                >
-                  <CalendarCheck className="h-3.5 w-3.5" />
-                  Add New Booking
-                </Link>
-                <button
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-stone-600 hover:border-stone-500 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-stone-300 transition-colors"
-                >
-                  <Bell className="h-3.5 w-3.5" />
-                  Send Reminders
-                </button>
+              <div className="mt-5">
+                <NewBookingButton business={business} variant="dark-card" />
               </div>
             </CardContent>
           </Card>

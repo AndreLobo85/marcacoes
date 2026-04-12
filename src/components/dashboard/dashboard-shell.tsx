@@ -27,8 +27,8 @@ import {
   Menu,
   LayoutDashboard,
   UserCircle,
-  Plus,
 } from 'lucide-react'
+import { NewBookingButton } from './new-booking-button'
 import { cn } from '@/lib/utils'
 
 interface DashboardShellProps {
@@ -43,6 +43,7 @@ const navItems = [
   { href: '/dashboard/bookings', label: 'MARCAÇÕES', icon: CalendarCheck },
   { href: '/dashboard/services', label: 'SERVICES', icon: Scissors },
   { href: '/dashboard/professionals', label: 'STAFF', icon: Users },
+  { href: '/dashboard/customers', label: 'CLIENTS', icon: UserCircle },
   { href: '/dashboard/schedule', label: 'HORÁRIOS', icon: Clock },
   { href: '/dashboard/settings', label: 'SETTINGS', icon: Settings },
 ]
@@ -79,18 +80,11 @@ function NavContent({ pathname, business }: { pathname: string; business: Busine
       </nav>
 
       {/* New Appointment */}
-      <div className="px-3 pb-4">
-        <Link
-          href="/dashboard/bookings"
-          className={cn(
-            buttonVariants({ variant: 'outline' }),
-            'w-full justify-start gap-2 text-xs font-medium'
-          )}
-        >
-          <Plus className="h-4 w-4" />
-          Nova Marcação
-        </Link>
-      </div>
+      {business && (
+        <div className="px-3 pb-4">
+          <NewBookingButton business={business} variant="button" />
+        </div>
+      )}
     </div>
   )
 }
