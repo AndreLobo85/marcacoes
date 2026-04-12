@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -15,7 +16,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { UserPlus, Shield, ShieldCheck, Crown, Headset, Trash2 } from 'lucide-react'
+import { UserPlus, Shield, ShieldCheck, Crown, Headset, Trash2, Save, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 
 type MemberRole = 'owner' | 'manager' | 'staff' | 'receptionist'
@@ -24,29 +25,58 @@ interface EnrichedMember extends BusinessMember {
   email: string
 }
 
-const ROLE_CONFIG: Record<MemberRole, { label: string; icon: typeof Crown; description: string; color: string }> = {
-  owner: { label: 'Owner', icon: Crown, description: 'Acesso total a todos os menus e definições', color: '#C4A265' },
-  manager: { label: 'Manager', icon: ShieldCheck, description: 'Gerir staff, serviços, marcações e ver estatísticas', color: '#1C1C1C' },
-  staff: { label: 'Colaborador', icon: Shield, description: 'Ver e gerir apenas a sua própria agenda', color: '#78716C' },
-  receptionist: { label: 'Rececionista', icon: Headset, description: 'Criar marcações e gerir clientes', color: '#44403C' },
+interface RolePermission {
+  id: string
+  business_id: string
+  role: string
+  permission: string
+  granted: boolean
 }
 
-const PERMISSIONS: Array<{ label: string; owner: boolean; manager: boolean; staff: boolean; receptionist: boolean }> = [
-  { label: 'Dashboard & Estatísticas', owner: true, manager: true, staff: false, receptionist: false },
-  { label: 'Gerir Marcações (todas)', owner: true, manager: true, staff: false, receptionist: true },
-  { label: 'Ver Agenda Própria', owner: true, manager: true, staff: true, receptionist: true },
-  { label: 'Gerir Staff & Serviços', owner: true, manager: true, staff: false, receptionist: false },
-  { label: 'Gerir Clientes', owner: true, manager: true, staff: false, receptionist: true },
-  { label: 'Definições do Negócio', owner: true, manager: false, staff: false, receptionist: false },
-  { label: 'Gerir Membros & Acessos', owner: true, manager: false, staff: false, receptionist: false },
-  { label: 'Pagamentos & Faturação', owner: true, manager: true, staff: false, receptionist: false },
+const ROLE_CONFIG: Record<MemberRole, { label: string; icon: typeof Crown; description: string; color: string }> = {
+  owner: { label: 'Owner', icon: Crown, description: 'Acesso total — todas as permissões', color: '#C4A265' },
+  manager: { label: 'Manager', icon: ShieldCheck, description: 'Gestão operacional completa', color: '#1C1C1C' },
+  staff: { label: 'Colaborador', icon: Shield, description: 'Acesso à própria agenda', color: '#78716C' },
+  receptionist: { label: 'Rececionista', icon: Headset, description: 'Marcações e clientes', color: '#44403C' },
+}
+
+const PERMISSION_DEFS = [
+  { key: 'dashboard', label: 'Dashboard & Visão Geral', description: 'Ver painel principal e KPIs' },
+  { key: 'analytics', label: 'Estatísticas & Analytics', description: 'Ver gráficos e relatórios' },
+  { key: 'bookings_all', label: 'Gerir Todas as Marcações', description: 'Ver e gerir marcações de todos os colaboradores' },
+  { key: 'bookings_own', label: 'Ver Agenda Própria', description: 'Ver e gerir apenas as suas marcações' },
+  { key: 'staff_manage', label: 'Gerir Equipa & Serviços', description: 'Adicionar/editar staff, serviços e horários' },
+  { key: 'clients', label: 'Gerir Clientes', description: 'Ver fichas de clientes e histórico' },
+  { key: 'settings', label: 'Definições do Negócio', description: 'Alterar configurações, página pública, notificações' },
+  { key: 'team_access', label: 'Gerir Membros & Acessos', description: 'Convidar/remover membros e alterar roles' },
+  { key: 'payments', label: 'Pagamentos & Faturação', description: 'Ver pagamentos, subscrição e extensões' },
+  { key: 'marketing', label: 'Marketing & Campanhas', description: 'Criar e gerir campanhas SMS/email' },
 ]
+
+// Default permissions when no custom overrides exist
+const DEFAULT_PERMISSIONS: Record<string, Record<MemberRole, boolean>> = {
+  dashboard: { owner: true, manager: true, staff: false, receptionist: false },
+  analytics: { owner: true, manager: true, staff: false, receptionist: false },
+  bookings_all: { owner: true, manager: true, staff: false, receptionist: true },
+  bookings_own: { owner: true, manager: true, staff: true, receptionist: true },
+  staff_manage: { owner: true, manager: true, staff: false, receptionist: false },
+  clients: { owner: true, manager: true, staff: false, receptionist: true },
+  settings: { owner: true, manager: false, staff: false, receptionist: false },
+  team_access: { owner: true, manager: false, staff: false, receptionist: false },
+  payments: { owner: true, manager: true, staff: false, receptionist: false },
+  marketing: { owner: true, manager: true, staff: false, receptionist: false },
+}
 
 export default function TeamPage() {
   const [members, setMembers] = useState<EnrichedMember[]>([])
   const [business, setBusiness] = useState<Business | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string>('')
+  const [permissions, setPermissions] = useState<RolePermission[]>([])
+  const [permissionChanges, setPermissionChanges] = useState<Map<string, boolean>>(new Map())
+  const [savingPermissions, setSavingPermissions] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingMember, setEditingMember] = useState<EnrichedMember | null>(null)
+  const [editRole, setEditRole] = useState<MemberRole>('staff')
   const [inviteForm, setInviteForm] = useState({ email: '', role: 'staff' as MemberRole })
   const [loading, setLoading] = useState(false)
 
@@ -61,30 +91,75 @@ export default function TeamPage() {
     if (!biz) return
     setBusiness(biz as Business)
 
-    const { data: membersData } = await supabase
-      .from('business_members')
-      .select('*')
-      .eq('business_id', biz.id)
-      .order('created_at')
+    const [{ data: membersData }, { data: permData }] = await Promise.all([
+      supabase.from('business_members').select('*').eq('business_id', biz.id).order('created_at'),
+      supabase.from('role_permissions').select('*').eq('business_id', biz.id),
+    ])
 
-    // Get user emails (we need to use auth admin or store emails)
-    // For now, use invited_email or a placeholder
     const enriched: EnrichedMember[] = ((membersData || []) as BusinessMember[]).map((m) => ({
       ...m,
       email: m.invited_email || (m.user_id === user.id ? user.email || '' : 'member@email.com'),
     }))
 
     setMembers(enriched)
+    setPermissions((permData || []) as RolePermission[])
+    setPermissionChanges(new Map())
   }, [supabase])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Get effective permission value (custom override or default)
+  function getPermission(role: MemberRole, permKey: string): boolean {
+    // Check local unsaved changes first
+    const changeKey = `${role}:${permKey}`
+    if (permissionChanges.has(changeKey)) return permissionChanges.get(changeKey)!
+    // Check DB overrides
+    const override = permissions.find((p) => p.role === role && p.permission === permKey)
+    if (override) return override.granted
+    // Fall back to defaults
+    return DEFAULT_PERMISSIONS[permKey]?.[role] ?? false
+  }
+
+  function togglePermission(role: MemberRole, permKey: string) {
+    if (role === 'owner') return // Owner always has all permissions
+    const current = getPermission(role, permKey)
+    const changeKey = `${role}:${permKey}`
+    setPermissionChanges((prev) => {
+      const next = new Map(prev)
+      next.set(changeKey, !current)
+      return next
+    })
+  }
+
+  async function savePermissions() {
+    if (!business || permissionChanges.size === 0) return
+    setSavingPermissions(true)
+
+    const upserts: Array<{ business_id: string; role: string; permission: string; granted: boolean }> = []
+    for (const [key, granted] of permissionChanges) {
+      const [role, permission] = key.split(':')
+      upserts.push({ business_id: business.id, role, permission, granted })
+    }
+
+    for (const upsert of upserts) {
+      const existing = permissions.find((p) => p.role === upsert.role && p.permission === upsert.permission)
+      if (existing) {
+        await supabase.from('role_permissions').update({ granted: upsert.granted }).eq('id', existing.id)
+      } else {
+        await supabase.from('role_permissions').insert(upsert)
+      }
+    }
+
+    toast.success(`${upserts.length} permissão(ões) atualizada(s)`)
+    setSavingPermissions(false)
+    loadData()
+  }
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
     if (!business) return
     setLoading(true)
 
-    // Check if already a member
     const existing = members.find((m) => m.email === inviteForm.email)
     if (existing) {
       toast.error('Este email já é membro')
@@ -92,24 +167,16 @@ export default function TeamPage() {
       return
     }
 
-    // For MVP: create the member entry with invited_email
-    // In production, would send an invite email and create on acceptance
     const { error } = await supabase.from('business_members').insert({
       business_id: business.id,
-      user_id: currentUserId, // placeholder — real flow would use invite token
+      user_id: currentUserId,
       role: inviteForm.role,
       invited_email: inviteForm.email,
       invited_at: new Date().toISOString(),
       is_active: true,
     })
 
-    if (error) {
-      // Likely unique constraint — user_id already exists
-      toast.error('Erro ao convidar: ' + error.message)
-      setLoading(false)
-      return
-    }
-
+    if (error) { toast.error('Erro ao convidar: ' + error.message); setLoading(false); return }
     toast.success(`Convite enviado para ${inviteForm.email}`)
     setDialogOpen(false)
     setInviteForm({ email: '', role: 'staff' })
@@ -118,38 +185,34 @@ export default function TeamPage() {
   }
 
   async function handleChangeRole(memberId: string, newRole: MemberRole) {
-    const { error } = await supabase
-      .from('business_members')
-      .update({ role: newRole })
-      .eq('id', memberId)
-
+    const { error } = await supabase.from('business_members').update({ role: newRole }).eq('id', memberId)
     if (error) { toast.error(error.message); return }
     toast.success('Role atualizado')
+    setEditingMember(null)
     loadData()
   }
 
   async function handleRemove(member: EnrichedMember) {
-    if (member.role === 'owner') {
-      toast.error('Não é possível remover o owner')
-      return
-    }
+    if (member.role === 'owner') { toast.error('Não é possível remover o owner'); return }
     if (!confirm(`Remover ${member.email} da equipa?`)) return
-
     const { error } = await supabase.from('business_members').delete().eq('id', member.id)
     if (error) { toast.error(error.message); return }
     toast.success('Membro removido')
     loadData()
   }
 
+  const hasChanges = permissionChanges.size > 0
+  const editableRoles: MemberRole[] = ['manager', 'staff', 'receptionist']
+
   return (
-    <div className="space-y-8 max-w-4xl">
+    <div className="space-y-8 max-w-5xl">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="font-serif text-3xl font-bold tracking-tight">Team Access</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage who has access to your business dashboard.</p>
+          <h1 className="font-serif text-3xl font-bold tracking-tight">Team & Permissions</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage team members, roles, and customize permissions.</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="gap-2 bg-accent hover:bg-[#D4B87A] text-white uppercase tracking-wider text-xs">
+        <Button onClick={() => { setEditingMember(null); setDialogOpen(true) }} className="gap-2 bg-accent hover:bg-[#D4B87A] text-white uppercase tracking-wider text-xs">
           <UserPlus className="h-4 w-4" />
           Invite Member
         </Button>
@@ -165,7 +228,7 @@ export default function TeamPage() {
           const roleConfig = ROLE_CONFIG[m.role as MemberRole] || ROLE_CONFIG.staff
           const RoleIcon = roleConfig.icon
           const isOwner = m.role === 'owner'
-          const isSelf = m.user_id === currentUserId
+          const isSelf = m.user_id === currentUserId && members.filter((x) => x.user_id === currentUserId).indexOf(m) === 0
 
           return (
             <Card key={m.id}>
@@ -191,21 +254,12 @@ export default function TeamPage() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  {!isOwner && !isSelf && (
+                  {!isOwner && (
                     <>
-                      <Select
-                        value={m.role}
-                        onValueChange={(v) => handleChangeRole(m.id, v as MemberRole)}
-                      >
-                        <SelectTrigger className="w-36 h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="manager">Manager</SelectItem>
-                          <SelectItem value="staff">Colaborador</SelectItem>
-                          <SelectItem value="receptionist">Rececionista</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5"
+                        onClick={() => { setEditingMember(m); setEditRole(m.role as MemberRole) }}>
+                        <Pencil className="h-3 w-3" />Editar Role
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleRemove(m)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -221,45 +275,153 @@ export default function TeamPage() {
         })}
       </div>
 
-      {/* Permissions table */}
+      {/* Editable Permissions Matrix */}
       <Card>
         <CardContent className="pt-6">
-          <p className="text-[10px] uppercase tracking-[0.2em] font-semibold mb-4">Permissions by Role</p>
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.2em] font-semibold">Permissions by Role</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Clique nos toggles para personalizar as permissões de cada role.</p>
+            </div>
+            {hasChanges && (
+              <Button onClick={savePermissions} disabled={savingPermissions} size="sm" className="gap-2 bg-accent hover:bg-[#D4B87A] text-white uppercase tracking-wider text-xs">
+                <Save className="h-3.5 w-3.5" />
+                {savingPermissions ? 'A guardar...' : `Guardar ${permissionChanges.size} alteração(ões)`}
+              </Button>
+            )}
+          </div>
+
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-2 pr-4 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Permissão</th>
-                  {(['owner', 'manager', 'staff', 'receptionist'] as MemberRole[]).map((role) => (
-                    <th key={role} className="text-center py-2 px-3 text-[10px] uppercase tracking-wider font-semibold" style={{ color: ROLE_CONFIG[role].color }}>
-                      {ROLE_CONFIG[role].label}
+                  <th className="text-left py-3 pr-4 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold w-[40%]">
+                    Permissão
+                  </th>
+                  <th className="text-center py-3 px-3 text-[10px] uppercase tracking-wider font-semibold" style={{ color: ROLE_CONFIG.owner.color }}>
+                    <div className="flex items-center justify-center gap-1">
+                      <Crown className="h-3 w-3" />
+                      Owner
+                    </div>
+                  </th>
+                  {editableRoles.map((role) => (
+                    <th key={role} className="text-center py-3 px-3 text-[10px] uppercase tracking-wider font-semibold" style={{ color: ROLE_CONFIG[role].color }}>
+                      <div className="flex items-center justify-center gap-1">
+                        {role === 'manager' && <ShieldCheck className="h-3 w-3" />}
+                        {role === 'staff' && <Shield className="h-3 w-3" />}
+                        {role === 'receptionist' && <Headset className="h-3 w-3" />}
+                        {ROLE_CONFIG[role].label}
+                      </div>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {PERMISSIONS.map((perm) => (
-                  <tr key={perm.label} className="border-b border-border/50">
-                    <td className="py-2.5 pr-4 text-xs">{perm.label}</td>
-                    {(['owner', 'manager', 'staff', 'receptionist'] as MemberRole[]).map((role) => (
-                      <td key={role} className="text-center py-2.5 px-3">
-                        {perm[role] ? (
-                          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent/10 text-accent text-[10px]">✓</span>
-                        ) : (
-                          <span className="text-muted-foreground/30">—</span>
-                        )}
+                {PERMISSION_DEFS.map((perm) => {
+                  return (
+                    <tr key={perm.key} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                      <td className="py-3 pr-4">
+                        <p className="text-xs font-medium">{perm.label}</p>
+                        <p className="text-[10px] text-muted-foreground">{perm.description}</p>
                       </td>
-                    ))}
-                  </tr>
-                ))}
+                      {/* Owner — always on, not editable */}
+                      <td className="text-center py-3 px-3">
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent/10 text-accent text-[10px]">✓</span>
+                      </td>
+                      {/* Editable roles */}
+                      {editableRoles.map((role) => {
+                        const granted = getPermission(role, perm.key)
+                        const changeKey = `${role}:${perm.key}`
+                        const isChanged = permissionChanges.has(changeKey)
+                        return (
+                          <td key={role} className="text-center py-3 px-3">
+                            <div className="flex items-center justify-center">
+                              <Switch
+                                checked={granted}
+                                onCheckedChange={() => togglePermission(role, perm.key)}
+                                className={isChanged ? 'ring-2 ring-accent ring-offset-1' : ''}
+                              />
+                            </div>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
+
+          {hasChanges && (
+            <div className="mt-4 flex items-center justify-between rounded-lg bg-accent/5 border border-accent/20 px-4 py-3">
+              <p className="text-xs font-medium text-accent">{permissionChanges.size} permissão(ões) alterada(s) — não guardadas</p>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => setPermissionChanges(new Map())}>Descartar</Button>
+                <Button size="sm" className="bg-accent hover:bg-[#D4B87A] text-white text-xs gap-1.5" onClick={savePermissions} disabled={savingPermissions}>
+                  <Save className="h-3 w-3" />Guardar
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* Edit Role Dialog */}
+      {editingMember && (
+        <Dialog open={!!editingMember} onOpenChange={(open) => !open && setEditingMember(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-serif">Editar Role — {editingMember.email}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-3">
+                {editableRoles.map((role) => {
+                  const config = ROLE_CONFIG[role]
+                  const RoleIcon = config.icon
+                  const isSelected = editRole === role
+                  return (
+                    <div
+                      key={role}
+                      onClick={() => setEditRole(role)}
+                      className={`flex items-start gap-3 rounded-lg border-2 p-4 cursor-pointer transition-all ${
+                        isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/30'
+                      }`}
+                    >
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-lg shrink-0 ${isSelected ? 'bg-accent text-white' : 'bg-secondary text-muted-foreground'}`}>
+                        <RoleIcon className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">{config.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{config.description}</p>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {PERMISSION_DEFS.filter((p) => getPermission(role, p.key)).map((p) => (
+                            <Badge key={p.key} variant="secondary" className="text-[8px] uppercase tracking-wider px-1.5 py-0">
+                              {p.label}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <DialogFooter>
+                <Button
+                  onClick={() => handleChangeRole(editingMember.id, editRole)}
+                  disabled={editRole === editingMember.role}
+                  className="uppercase tracking-wider text-xs"
+                >
+                  {editRole === editingMember.role ? 'Sem alterações' : `Alterar para ${ROLE_CONFIG[editRole].label}`}
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Invite Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen && !editingMember} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-serif">Invite Team Member</DialogTitle>
@@ -278,40 +440,18 @@ export default function TeamPage() {
             </div>
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-wider font-medium">Role</Label>
-              <Select value={inviteForm.role} onValueChange={(v) => setInviteForm({ ...inviteForm, role: v as MemberRole })}>
-                <SelectTrigger className="bg-background">
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={inviteForm.role} onValueChange={(v) => v && setInviteForm({ ...inviteForm, role: v as MemberRole })}>
+                <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="manager">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                      <span>Manager — Gestão completa (exceto definições)</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="staff">
-                    <div className="flex items-center gap-2">
-                      <Shield className="h-3.5 w-3.5" />
-                      <span>Colaborador — Apenas a sua agenda</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="receptionist">
-                    <div className="flex items-center gap-2">
-                      <Headset className="h-3.5 w-3.5" />
-                      <span>Rececionista — Marcações e clientes</span>
-                    </div>
-                  </SelectItem>
+                  <SelectItem value="manager"><div className="flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5" /><span>Manager</span></div></SelectItem>
+                  <SelectItem value="staff"><div className="flex items-center gap-2"><Shield className="h-3.5 w-3.5" /><span>Colaborador</span></div></SelectItem>
+                  <SelectItem value="receptionist"><div className="flex items-center gap-2"><Headset className="h-3.5 w-3.5" /><span>Rececionista</span></div></SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Role description */}
             <div className="rounded-lg bg-secondary p-3">
-              <p className="text-xs text-muted-foreground">
-                {ROLE_CONFIG[inviteForm.role].description}
-              </p>
+              <p className="text-xs text-muted-foreground">{ROLE_CONFIG[inviteForm.role].description}</p>
             </div>
-
             <DialogFooter>
               <Button type="submit" disabled={loading} className="uppercase tracking-wider text-xs">
                 {loading ? 'A enviar...' : 'Enviar Convite'}
