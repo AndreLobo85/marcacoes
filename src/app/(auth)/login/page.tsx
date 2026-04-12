@@ -30,6 +30,10 @@ export default function LoginPage() {
       return
     }
 
+    // Clear any previous business selection so super admins see the selector
+    document.cookie = 'selected_business_id=; path=/; max-age=0'
+    localStorage.removeItem('selected_business_id')
+
     router.push('/dashboard')
     router.refresh()
   }
