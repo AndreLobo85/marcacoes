@@ -162,13 +162,13 @@ export default function ProfessionalsPage() {
       const { error } = await supabase.from('staff_profiles').update(payload).eq('id', editing.id)
       if (error) { toast.error(error.message); setLoading(false); return }
 
-      // Update role in business_members
+      // Update role in business_members via RPC (bypasses RLS)
       if (editing.user_id && business) {
-        const { error: roleErr } = await supabase
-          .from('business_members')
-          .update({ role: form.role } as Record<string, unknown>)
-          .eq('user_id', editing.user_id)
-          .eq('business_id', business.id)
+        const { error: roleErr } = await supabase.rpc('update_member_role', {
+          p_target_user_id: editing.user_id,
+          p_business_id: business.id,
+          p_new_role: form.role,
+        })
         if (roleErr) {
           toast.error('Erro ao alterar role: ' + roleErr.message)
         }
