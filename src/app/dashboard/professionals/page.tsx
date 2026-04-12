@@ -92,9 +92,20 @@ export default function ProfessionalsPage() {
     setDialogOpen(true)
   }
 
-  function openEdit(p: StaffProfile) {
+  async function openEdit(p: StaffProfile) {
+    // Fetch current role from business_members
+    let currentRole = 'staff'
+    if (p.user_id) {
+      const { data: bm } = await supabase
+        .from('business_members')
+        .select('role')
+        .eq('user_id', p.user_id)
+        .eq('business_id', business?.id || '')
+        .maybeSingle()
+      if (bm?.role) currentRole = bm.role
+    }
     setEditing(p)
-    setForm({ name: p.name, email: p.email || '', phone: p.phone || '', color: p.color, bio: p.bio || '', password: '', role: 'staff' })
+    setForm({ name: p.name, email: p.email || '', phone: p.phone || '', color: p.color, bio: p.bio || '', password: '', role: currentRole })
     setAvatarFile(null)
     setAvatarPreview(p.avatar_url || null)
     setDialogOpen(true)
@@ -142,6 +153,15 @@ export default function ProfessionalsPage() {
 
       const { error } = await supabase.from('staff_profiles').update(payload).eq('id', editing.id)
       if (error) { toast.error(error.message); setLoading(false); return }
+
+      // Update role in business_members
+      if (editing.user_id && business) {
+        await supabase
+          .from('business_members')
+          .update({ role: form.role })
+          .eq('user_id', editing.user_id)
+          .eq('business_id', business.id)
+      }
       toast.success('Profissional atualizado')
     } else {
       // Create user account via API
@@ -477,6 +497,20 @@ export default function ProfessionalsPage() {
                     <Label className="text-xs uppercase tracking-wider font-medium">Telefone</Label>
                     <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="bg-background" />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider font-medium">Role</Label>
+                  <Select value={form.role} onValueChange={(v) => v && setForm({ ...form, role: v })}>
+                    <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manager"><div className="flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5" /><span>Manager</span></div></SelectItem>
+                      <SelectItem value="staff"><div className="flex items-center gap-2"><Shield className="h-3.5 w-3.5" /><span>Colaborador</span></div></SelectItem>
+                      <SelectItem value="receptionist"><div className="flex items-center gap-2"><Headset className="h-3.5 w-3.5" /><span>Rececionista</span></div></SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    {form.role === 'manager' ? 'Gestão operacional completa' : form.role === 'receptionist' ? 'Marcações e clientes' : 'Acesso à própria agenda'}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs uppercase tracking-wider font-medium">Cor</Label>
