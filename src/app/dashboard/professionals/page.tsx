@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getUserBusinessClient } from '@/lib/get-user-business-client'
 import type { StaffProfile, Business, Service, StaffService, StaffWorkingHours } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,10 +40,8 @@ export default function ProfessionalsPage() {
   const supabase = createClient()
 
   const loadData = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: biz } = await supabase.from('businesses').select('*').eq('owner_id', user.id).single()
+    const { user, business: biz } = await getUserBusinessClient(supabase)
+    if (!user || !biz) return
     if (!biz) return
     setBusiness(biz)
 

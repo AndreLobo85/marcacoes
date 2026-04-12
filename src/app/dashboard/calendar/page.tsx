@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getUserBusinessClient } from '@/lib/get-user-business-client'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
@@ -20,10 +21,8 @@ export default function CalendarPage() {
   const supabase = createClient()
 
   const loadData = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: biz } = await supabase.from('businesses').select('id').eq('owner_id', user.id).single()
+    const { user, business: biz } = await getUserBusinessClient(supabase)
+    if (!user || !biz) return
     if (!biz) return
 
     const [{ data: staffData }, { data: bookings }, { data: customers }] = await Promise.all([

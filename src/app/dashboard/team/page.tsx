@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getUserBusinessClient } from '@/lib/get-user-business-client'
 import type { BusinessMember, Business } from '@/types/database'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -83,13 +84,10 @@ export default function TeamPage() {
   const supabase = createClient()
 
   const loadData = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const { user, business: biz } = await getUserBusinessClient(supabase)
+    if (!user || !biz) return
     setCurrentUserId(user.id)
-
-    const { data: biz } = await supabase.from('businesses').select('*').eq('owner_id', user.id).single()
-    if (!biz) return
-    setBusiness(biz as Business)
+    setBusiness(biz)
 
     const [{ data: membersData }, { data: permData }] = await Promise.all([
       supabase.from('business_members').select('*').eq('business_id', biz.id).order('created_at'),
@@ -155,6 +153,8 @@ export default function TeamPage() {
     loadData()
   }
 
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
+
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
     if (!business) return
@@ -167,19 +167,23 @@ export default function TeamPage() {
       return
     }
 
-    const { error } = await supabase.from('business_members').insert({
-      business_id: business.id,
-      user_id: currentUserId,
-      role: inviteForm.role,
-      invited_email: inviteForm.email,
-      invited_at: new Date().toISOString(),
-      is_active: true,
+    // Call invite API to create token
+    const res = await fetch('/api/internal/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        businessId: business.id,
+        email: inviteForm.email,
+        role: inviteForm.role,
+      }),
     })
 
-    if (error) { toast.error('Erro ao convidar: ' + error.message); setLoading(false); return }
-    toast.success(`Convite enviado para ${inviteForm.email}`)
-    setDialogOpen(false)
-    setInviteForm({ email: '', role: 'staff' })
+    const data = await res.json()
+
+    if (!res.ok) { toast.error(data.error || 'Erro ao convidar'); setLoading(false); return }
+
+    setInviteUrl(data.inviteUrl)
+    toast.success(`Convite criado para ${inviteForm.email}`)
     setLoading(false)
     loadData()
   }
@@ -452,11 +456,25 @@ export default function TeamPage() {
             <div className="rounded-lg bg-secondary p-3">
               <p className="text-xs text-muted-foreground">{ROLE_CONFIG[inviteForm.role].description}</p>
             </div>
-            <DialogFooter>
-              <Button type="submit" disabled={loading} className="uppercase tracking-wider text-xs">
-                {loading ? 'A enviar...' : 'Enviar Convite'}
-              </Button>
-            </DialogFooter>
+
+            {inviteUrl && (
+              <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 space-y-2">
+                <p className="text-xs font-semibold text-accent uppercase tracking-wider">Link de Convite Gerado</p>
+                <code className="block text-xs bg-white rounded px-3 py-2 break-all border border-border">{inviteUrl}</code>
+                <Button type="button" variant="outline" size="sm" className="text-xs w-full" onClick={() => { navigator.clipboard.writeText(inviteUrl); toast.success('Link copiado!') }}>
+                  Copiar Link
+                </Button>
+                <p className="text-[10px] text-muted-foreground">Partilhe este link com o colaborador. Expira em 7 dias.</p>
+              </div>
+            )}
+
+            {!inviteUrl && (
+              <DialogFooter>
+                <Button type="submit" disabled={loading} className="uppercase tracking-wider text-xs">
+                  {loading ? 'A criar convite...' : 'Criar Convite'}
+                </Button>
+              </DialogFooter>
+            )}
           </form>
         </DialogContent>
       </Dialog>

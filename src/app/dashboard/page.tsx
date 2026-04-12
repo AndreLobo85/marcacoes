@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getUserBusiness } from '@/lib/get-user-business'
 import { redirect } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -24,13 +25,7 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: bizData } = await supabase
-    .from('businesses')
-    .select('*')
-    .eq('owner_id', user.id)
-    .single()
-
-  const business = bizData as Business | null
+  const business = await getUserBusiness(supabase)
   if (!business) redirect('/dashboard/onboarding')
 
   const today = new Date().toISOString().split('T')[0]

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getUserBusinessClient } from '@/lib/get-user-business-client'
 import type { Booking, BookingService, BookingAssignment, StaffProfile, Customer } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -45,14 +46,8 @@ export default function BookingsPage() {
   const supabase = createClient()
 
   const loadData = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: biz } = await supabase
-      .from('businesses')
-      .select('id')
-      .eq('owner_id', user.id)
-      .single()
+    const { user, business: biz } = await getUserBusinessClient(supabase)
+    if (!user || !biz) return
     if (!biz) return
 
     let query = supabase

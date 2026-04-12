@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { getUserBusinessClient } from '@/lib/get-user-business-client'
 import { Input } from '@/components/ui/input'
 import { Search, User, CalendarCheck, Scissors } from 'lucide-react'
 
@@ -26,9 +27,8 @@ export function GlobalSearch() {
   // Load business id once
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: biz } = await supabase.from('businesses').select('id').eq('owner_id', user.id).single()
+      const { user, business: biz } = await getUserBusinessClient(supabase)
+    if (!user || !biz) return
       if (biz) setBusinessId(biz.id)
     })()
   }, [supabase])

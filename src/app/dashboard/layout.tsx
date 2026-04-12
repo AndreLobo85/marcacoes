@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getUserBusiness } from '@/lib/get-user-business'
 import { DashboardShell } from '@/components/dashboard/dashboard-shell'
-import type { Business } from '@/types/database'
 
 export default async function DashboardLayout({
   children,
@@ -15,14 +15,7 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
-  // Get user's business
-  const { data } = await supabase
-    .from('businesses')
-    .select('*')
-    .eq('owner_id', user.id)
-    .single()
-
-  const business = data as Business | null
+  const business = await getUserBusiness(supabase)
 
   return (
     <DashboardShell user={user} business={business}>

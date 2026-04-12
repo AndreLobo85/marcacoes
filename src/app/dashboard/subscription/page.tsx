@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getUserBusinessClient } from '@/lib/get-user-business-client'
 import type { Business } from '@/types/database'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -76,9 +77,8 @@ export default function SubscriptionPage() {
   const supabase = createClient()
 
   const loadData = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { data: biz } = await supabase.from('businesses').select('*').eq('owner_id', user.id).single()
+    const { user, business: biz } = await getUserBusinessClient(supabase)
+    if (!user || !biz) return
     if (biz) setBusiness(biz as Business)
   }, [supabase])
 
