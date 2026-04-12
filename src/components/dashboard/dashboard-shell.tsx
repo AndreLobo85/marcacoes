@@ -107,15 +107,19 @@ function NavContent({ pathname, business }: { pathname: string; business: Busine
         </div>
       )}
 
-      {/* Switch business / Admin link */}
+      {/* Switch business */}
       <div className="px-3 pb-4 space-y-1">
-        <Link
-          href="/dashboard/select-business"
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-[10px] font-medium tracking-[0.08em] uppercase text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
+        <button
+          onClick={() => {
+            localStorage.removeItem('selected_business_id')
+            document.cookie = 'selected_business_id=;path=/;max-age=0'
+            window.location.href = '/select-business'
+          }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[10px] font-medium tracking-[0.08em] uppercase text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
         >
           <Building2 className="h-3.5 w-3.5" />
           Trocar Negócio
-        </Link>
+        </button>
       </div>
     </div>
   )

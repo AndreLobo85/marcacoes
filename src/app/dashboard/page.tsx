@@ -29,10 +29,10 @@ export default async function DashboardPage() {
   if (!business) {
     // Check if super admin — redirect to business selector instead of onboarding
     const { data: adminCheck } = await supabase.from('super_admins').select('id').eq('user_id', user.id).single()
-    if (adminCheck) redirect('/dashboard/select-business')
+    if (adminCheck) redirect('/select-business')
     // Check if has any memberships
     const { count } = await supabase.from('business_members').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
-    if ((count || 0) > 0) redirect('/dashboard/select-business')
+    if ((count || 0) > 0) redirect('/select-business')
     redirect('/dashboard/onboarding')
   }
 
