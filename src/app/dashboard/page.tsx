@@ -35,14 +35,14 @@ export default async function DashboardPage() {
       const cookieStore = await cookies()
       hasExplicitSelection = !!cookieStore.get('selected_business_id')?.value
     } catch {}
-    if (!hasExplicitSelection) redirect('/dashboard/select-business')
+    if (!hasExplicitSelection) redirect('/select-business')
   }
 
   const business = await getUserBusiness(supabase)
   if (!business) {
     // Check if has any memberships
     const { count } = await supabase.from('business_members').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
-    if ((count || 0) > 0) redirect('/dashboard/select-business')
+    if ((count || 0) > 0) redirect('/select-business')
     redirect('/dashboard/onboarding')
   }
 
