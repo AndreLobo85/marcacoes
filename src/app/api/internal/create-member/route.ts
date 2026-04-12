@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 /**
  * POST /api/internal/create-member
- * Owner creates a new team member with email + password directly.
+ * Owner/manager creates a new team member with email + password directly.
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Password deve ter pelo menos 6 caracteres' }, { status: 400 })
   }
 
-  // Verify user is owner of this business or super admin
+  // Verify user is owner/manager of this business or super admin
   const { data: member } = await supabase
     .from('business_members')
     .select('role')
@@ -43,47 +43,61 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Use admin client for all operations
   const admin = createAdminClient()
 
-  // Create or find auth user
+  // 1. Create or find auth user (use getUserByEmail instead of listUsers to avoid pagination issues)
   let newUserId: string | null = null
 
-  // Check if user already exists
-  const { data: existingUsers } = await admin.auth.admin.listUsers()
-  const existingUser = existingUsers?.users?.find((u) => u.email === email)
+  const { data: authData, error: createError } = await admin.auth.admin.createUser({
+    email, password, email_confirm: true, user_metadata: { full_name: name },
+  })
 
-  if (existingUser) {
-    newUserId = existingUser.id
-  } else {
-    const { data: authData, error: authError } = await admin.auth.admin.createUser({
-      email, password, email_confirm: true, user_metadata: { full_name: name },
-    })
-    if (authError || !authData.user) {
-      return NextResponse.json({ error: authError?.message || 'Erro ao criar utilizador' }, { status: 500 })
+  if (createError) {
+    // User already exists — find their ID
+    if (createError.message?.includes('already been registered') || createError.status === 422) {
+      const { data: listData } = await admin.auth.admin.listUsers({ perPage: 1000 })
+      const existing = listData?.users?.find((u) => u.email === email)
+      if (existing) {
+        newUserId = existing.id
+      } else {
+        return NextResponse.json({ error: 'Utilizador existe mas não foi possível encontrar o ID' }, { status: 500 })
+      }
+    } else {
+      return NextResponse.json({ error: createError.message || 'Erro ao criar utilizador' }, { status: 500 })
     }
-    newUserId = authData.user.id
+  } else {
+    newUserId = authData.user?.id || null
   }
 
   if (!newUserId) {
     return NextResponse.json({ error: 'Não foi possível criar o utilizador' }, { status: 500 })
   }
 
-  // Insert into business_members using admin client (bypasses RLS)
-  const { error: memberError } = await admin.from('business_members').insert({
-    business_id: businessId,
-    user_id: newUserId,
-    role,
-    invited_email: email,
-    joined_at: new Date().toISOString(),
-    is_active: true,
-  })
+  // 2. Upsert into business_members (handle existing members gracefully)
+  const { data: existingMember } = await admin
+    .from('business_members')
+    .select('id')
+    .eq('business_id', businessId)
+    .eq('user_id', newUserId)
+    .maybeSingle()
 
-  if (memberError) {
-    if (memberError.message.includes('duplicate') || memberError.code === '23505') {
-      return NextResponse.json({ error: 'Este email já é membro deste negócio' }, { status: 400 })
+  if (existingMember) {
+    // Already a member — just update role and reactivate
+    await admin.from('business_members')
+      .update({ role, is_active: true })
+      .eq('id', existingMember.id)
+  } else {
+    const { error: memberError } = await admin.from('business_members').insert({
+      business_id: businessId,
+      user_id: newUserId,
+      role,
+      invited_email: email,
+      joined_at: new Date().toISOString(),
+      is_active: true,
+    })
+    if (memberError) {
+      return NextResponse.json({ error: memberError.message }, { status: 500 })
     }
-    return NextResponse.json({ error: memberError.message }, { status: 500 })
   }
 
   return NextResponse.json({ success: true, userId: newUserId, email, name, role })
