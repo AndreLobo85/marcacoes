@@ -33,7 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </Link>
         </nav>
         <div className="px-3 pb-4">
-          <Link href="/" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[11px] font-medium tracking-[0.08em] uppercase text-white/40 hover:text-white hover:bg-white/10 transition-all">
+          <Link href="/select-business" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[11px] font-medium tracking-[0.08em] uppercase text-white/40 hover:text-white hover:bg-white/10 transition-all">
             <LogOut className="h-4 w-4" />Voltar ao Site
           </Link>
         </div>
