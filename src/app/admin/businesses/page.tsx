@@ -6,15 +6,29 @@ import type { Business } from '@/types/database'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Search, ExternalLink, Users, CalendarCheck } from 'lucide-react'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog'
+import { Search, ExternalLink, Users, CalendarCheck, Plus } from 'lucide-react'
 import { toast } from 'sonner'
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
 
 interface EnrichedBusiness extends Business {
   memberCount: number
@@ -24,6 +38,9 @@ interface EnrichedBusiness extends Business {
 export default function AdminBusinessesPage() {
   const [businesses, setBusinesses] = useState<EnrichedBusiness[]>([])
   const [search, setSearch] = useState('')
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [bizForm, setBizForm] = useState({ name: '', slug: '', description: '', phone: '', address: '', email: '' })
   const supabase = createClient()
 
   const loadData = useCallback(async () => {
@@ -66,6 +83,49 @@ export default function AdminBusinessesPage() {
     loadData()
   }
 
+  function handleBizNameChange(value: string) {
+    setBizForm({ ...bizForm, name: value, slug: slugify(value) })
+  }
+
+  async function handleCreateBusiness(e: React.FormEvent) {
+    e.preventDefault()
+    if (!bizForm.name || !bizForm.slug) return
+    setCreating(true)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { toast.error('Sessão expirada'); return }
+
+      const { error: insertError } = await supabase.from('businesses').insert({
+        owner_id: user.id,
+        name: bizForm.name,
+        slug: bizForm.slug,
+        description: bizForm.description || null,
+        phone: bizForm.phone || null,
+        address: bizForm.address || null,
+        email: bizForm.email || user.email,
+      })
+
+      if (insertError) {
+        if (insertError.code === '23505') {
+          toast.error('Este slug já está em uso. Escolhe outro.')
+        } else {
+          toast.error(insertError.message)
+        }
+        return
+      }
+
+      toast.success(`Negócio "${bizForm.name}" criado!`)
+      setDialogOpen(false)
+      setBizForm({ name: '', slug: '', description: '', phone: '', address: '', email: '' })
+      loadData()
+    } catch {
+      toast.error('Erro ao criar negócio')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   const filtered = businesses.filter((b) =>
     b.name.toLowerCase().includes(search.toLowerCase()) ||
     b.slug.toLowerCase().includes(search.toLowerCase()) ||
@@ -74,9 +134,18 @@ export default function AdminBusinessesPage() {
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <div>
-        <h1 className="font-serif text-3xl font-bold tracking-tight">Negócios</h1>
-        <p className="text-sm text-muted-foreground mt-1">Gerir todos os negócios registados na plataforma.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="font-serif text-3xl font-bold tracking-tight">Negócios</h1>
+          <p className="text-sm text-muted-foreground mt-1">Gerir todos os negócios registados na plataforma.</p>
+        </div>
+        <Button
+          onClick={() => { setBizForm({ name: '', slug: '', description: '', phone: '', address: '', email: '' }); setDialogOpen(true) }}
+          className="gap-2 bg-accent hover:bg-[#D4B87A] text-white uppercase tracking-wider text-xs"
+        >
+          <Plus className="h-4 w-4" />
+          Novo Negócio
+        </Button>
       </div>
 
       <div className="relative max-w-sm">
@@ -157,6 +226,87 @@ export default function AdminBusinessesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Create Business Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-xl">Configurar Negócio</DialogTitle>
+            <p className="text-sm text-muted-foreground">Preenche os dados do estabelecimento para começar a receber marcações.</p>
+          </DialogHeader>
+          <form onSubmit={handleCreateBusiness} className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider font-medium">Nome do Negócio *</Label>
+              <Input
+                value={bizForm.name}
+                onChange={(e) => handleBizNameChange(e.target.value)}
+                required
+                className="bg-background"
+                placeholder="Ex: Barbearia do Zé"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider font-medium">URL da Página Pública *</Label>
+              <div className="flex items-center gap-1">
+                <span className="text-sm text-muted-foreground whitespace-nowrap">marcacoes.pt/</span>
+                <Input
+                  value={bizForm.slug}
+                  onChange={(e) => setBizForm({ ...bizForm, slug: slugify(e.target.value) })}
+                  required
+                  className="bg-background"
+                  placeholder="barbearia-do-ze"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider font-medium">Email do Negócio</Label>
+              <Input
+                type="email"
+                value={bizForm.email}
+                onChange={(e) => setBizForm({ ...bizForm, email: e.target.value })}
+                className="bg-background"
+                placeholder="contacto@negocio.pt"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider font-medium">Descrição</Label>
+              <Textarea
+                value={bizForm.description}
+                onChange={(e) => setBizForm({ ...bizForm, description: e.target.value })}
+                className="bg-background"
+                placeholder="Breve descrição do negócio"
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider font-medium">Telefone</Label>
+                <Input
+                  value={bizForm.phone}
+                  onChange={(e) => setBizForm({ ...bizForm, phone: e.target.value })}
+                  className="bg-background"
+                  placeholder="+351 912 345 678"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider font-medium">Morada</Label>
+                <Input
+                  value={bizForm.address}
+                  onChange={(e) => setBizForm({ ...bizForm, address: e.target.value })}
+                  className="bg-background"
+                  placeholder="Rua..."
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="submit" disabled={creating} className="uppercase tracking-wider text-xs w-full">
+                {creating ? 'A criar...' : 'Criar Negócio'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
