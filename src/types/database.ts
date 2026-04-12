@@ -44,6 +44,9 @@ export interface Business {
   birthday_sms_template: string | null
   settings: Json | null
   subscription_plan: SubscriptionPlan
+  stripe_customer_id: string | null
+  subscription_status: string | null
+  subscription_period_end: string | null
   created_at: string
   updated_at: string
 }
@@ -250,6 +253,28 @@ export interface ReminderSettings {
   advance_minutes: number
   is_active: boolean
   created_at: string
+}
+
+export interface Campaign {
+  id: string
+  business_id: string
+  name: string
+  channel: string
+  subject: string | null
+  body: string
+  image_url: string | null
+  cta_text: string | null
+  cta_url: string | null
+  sender_name: string | null
+  segment: string
+  status: string
+  sent_at: string | null
+  recipients_count: number
+  cost_cents: number
+  bookings_generated: number
+  revenue_generated_cents: number
+  created_at: string
+  updated_at: string
 }
 
 // ── Database Interface (for Supabase client typing) ──

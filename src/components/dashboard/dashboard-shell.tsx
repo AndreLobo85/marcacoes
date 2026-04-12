@@ -31,6 +31,9 @@ import {
   ShieldCheck,
   Paintbrush,
   Bell,
+  Megaphone,
+  Puzzle,
+  CreditCard,
 } from 'lucide-react'
 import { NewBookingButton } from './new-booking-button'
 import { cn } from '@/lib/utils'
@@ -51,8 +54,11 @@ const navItems = [
   { href: '/dashboard/customers', label: 'CLIENTS', icon: UserCircle },
   { href: '/dashboard/schedule', label: 'HORÁRIOS', icon: Clock },
   { href: '/dashboard/notifications', label: 'NOTIFICATIONS', icon: Bell },
+  { href: '/dashboard/marketing', label: 'MARKETING', icon: Megaphone },
+  { href: '/dashboard/extensions', label: 'EXTENSIONS', icon: Puzzle },
   { href: '/dashboard/team', label: 'TEAM ACCESS', icon: ShieldCheck },
   { href: '/dashboard/page-editor', label: 'PAGE EDITOR', icon: Paintbrush },
+  { href: '/dashboard/subscription', label: 'SUBSCRIPTION', icon: CreditCard },
   { href: '/dashboard/settings', label: 'SETTINGS', icon: Settings },
 ]
 
