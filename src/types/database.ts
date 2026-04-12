@@ -40,6 +40,8 @@ export interface Business {
   social_website: string | null
   booking_page_online: boolean
   booking_page_settings: Json | null
+  birthday_sms_active: boolean
+  birthday_sms_template: string | null
   settings: Json | null
   subscription_plan: SubscriptionPlan
   created_at: string
@@ -227,6 +229,27 @@ export interface NotificationDelivery {
   error_message: string | null
   sent_at: string | null
   delivered_at: string | null
+}
+
+export interface NotificationTemplate {
+  id: string
+  business_id: string
+  event_type: string
+  channel: string
+  subject: string | null
+  body: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ReminderSettings {
+  id: string
+  business_id: string
+  channel: string
+  advance_minutes: number
+  is_active: boolean
+  created_at: string
 }
 
 // ── Database Interface (for Supabase client typing) ──
