@@ -30,11 +30,12 @@ export default function LoginPage() {
       return
     }
 
-    // Clear any previous business selection so super admins see the selector
-    document.cookie = 'selected_business_id=; path=/; max-age=0'
+    // Clear any previous business selection so super admins always see the selector
+    document.cookie = 'selected_business_id=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT'
     localStorage.removeItem('selected_business_id')
 
-    router.push('/dashboard')
+    // Always go through select-business — it auto-redirects single-business users
+    router.push('/select-business')
     router.refresh()
   }
 
