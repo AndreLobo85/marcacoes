@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient()
 
-  // 1. Create or find auth user (use getUserByEmail instead of listUsers to avoid pagination issues)
+  // 1. Create or find auth user
   let newUserId: string | null = null
 
   const { data: authData, error: createError } = await admin.auth.admin.createUser({
@@ -53,12 +53,11 @@ export async function POST(request: NextRequest) {
   })
 
   if (createError) {
-    // User already exists — find their ID
+    // User already exists — find their ID via direct DB query
     if (createError.message?.includes('already been registered') || createError.status === 422) {
-      const { data: listData } = await admin.auth.admin.listUsers({ perPage: 1000 })
-      const existing = listData?.users?.find((u) => u.email === email)
-      if (existing) {
-        newUserId = existing.id
+      const { data: foundId } = await admin.rpc('find_auth_user_by_email', { p_email: email })
+      if (foundId) {
+        newUserId = foundId as string
       } else {
         return NextResponse.json({ error: 'Utilizador existe mas não foi possível encontrar o ID' }, { status: 500 })
       }
