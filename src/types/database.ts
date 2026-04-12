@@ -28,10 +28,18 @@ export interface Business {
   phone: string | null
   email: string | null
   logo_url: string | null
+  cover_image_url: string | null
   country: string
   timezone: string
   locale: string
   currency: string
+  theme: string
+  footer_notes: string | null
+  social_facebook: string | null
+  social_instagram: string | null
+  social_website: string | null
+  booking_page_online: boolean
+  booking_page_settings: Json | null
   settings: Json | null
   subscription_plan: SubscriptionPlan
   created_at: string
@@ -165,6 +173,7 @@ export interface Customer {
   email: string | null
   phone: string | null
   notes: string | null
+  birthday_date: string | null
   created_at: string
   updated_at: string
 }

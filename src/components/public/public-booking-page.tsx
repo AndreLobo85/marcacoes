@@ -137,6 +137,23 @@ export function PublicBookingPage({ slug, business, services, staff, staffServic
   }
 
   const isServiceSelected = (id: string) => selectedItems.some((i) => i.service.id === id)
+  const bookingSettings = (business.booking_page_settings || {}) as Record<string, boolean>
+  const showPrices = bookingSettings.showPrices !== false
+
+  // Offline page
+  if (!business.booking_page_online) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md w-full mx-4 text-center">
+          <CardContent className="py-12">
+            <h2 className="font-serif text-2xl font-bold mb-2">{business.name}</h2>
+            <p className="text-muted-foreground">Marcações online temporariamente indisponíveis.</p>
+            {business.phone && <p className="text-sm mt-4">Contacte-nos: {business.phone}</p>}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   if (success) {
     return (
@@ -178,9 +195,13 @@ export function PublicBookingPage({ slug, business, services, staff, staffServic
 
       {/* Hero */}
       <section className="relative h-[60vh] min-h-[400px] flex items-center justify-center bg-[#1C1C1C] overflow-hidden mt-14">
-        {/* Dark overlay with texture */}
+        {/* Cover image or texture */}
+        {business.cover_image_url ? (
+          <img src={business.cover_image_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23C4A265\' fill-opacity=\'0.15\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' }} />
+        )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
-        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23C4A265\' fill-opacity=\'0.15\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' }} />
 
         <div className="relative z-10 text-center px-5">
           <h1 className="font-serif text-4xl md:text-6xl font-bold text-white leading-[1.1]">
@@ -265,9 +286,11 @@ export function PublicBookingPage({ slug, business, services, staff, staffServic
                         <span className={`text-xs ${selected ? 'text-white/50' : 'text-muted-foreground'}`}>
                           <Clock className="inline h-3 w-3 mr-1" />{s.duration_minutes} min
                         </span>
+                        {showPrices && (
                         <span className={`font-bold text-sm ${selected ? 'text-accent' : ''}`}>
                           {formatPrice(s.price_cents, s.currency, business.locale)}
                         </span>
+                      )}
                       </div>
                     </div>
                   )
@@ -494,12 +517,17 @@ export function PublicBookingPage({ slug, business, services, staff, staffServic
 
       {/* Footer */}
       <footer className="border-t border-border py-8 mt-8">
-        <div className="mx-auto max-w-6xl px-5 flex items-center justify-between">
-          <p className="font-serif italic text-sm">{business.name}</p>
-          <div className="flex gap-4 text-[10px] uppercase tracking-wider text-muted-foreground">
-            <span>Privacy</span>
-            <span>Terms</span>
-            <span>PT/EN</span>
+        <div className="mx-auto max-w-6xl px-5">
+          {business.footer_notes && (
+            <p className="text-sm text-muted-foreground mb-4 text-center">{business.footer_notes}</p>
+          )}
+          <div className="flex items-center justify-between">
+            <p className="font-serif italic text-sm">{business.name}</p>
+            <div className="flex gap-4 text-[10px] uppercase tracking-wider text-muted-foreground">
+              {business.social_facebook && <a href={business.social_facebook} target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">Facebook</a>}
+              {business.social_instagram && <a href={business.social_instagram} target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">Instagram</a>}
+              {business.social_website && <a href={business.social_website} target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">Website</a>}
+            </div>
           </div>
         </div>
       </footer>

@@ -29,6 +29,7 @@ import {
   UserCircle,
   BarChart3,
   ShieldCheck,
+  Paintbrush,
 } from 'lucide-react'
 import { NewBookingButton } from './new-booking-button'
 import { cn } from '@/lib/utils'
@@ -49,6 +50,7 @@ const navItems = [
   { href: '/dashboard/customers', label: 'CLIENTS', icon: UserCircle },
   { href: '/dashboard/schedule', label: 'HORÁRIOS', icon: Clock },
   { href: '/dashboard/team', label: 'TEAM ACCESS', icon: ShieldCheck },
+  { href: '/dashboard/page-editor', label: 'PAGE EDITOR', icon: Paintbrush },
   { href: '/dashboard/settings', label: 'SETTINGS', icon: Settings },
 ]
 
