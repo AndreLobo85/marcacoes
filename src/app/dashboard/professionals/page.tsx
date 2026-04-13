@@ -188,7 +188,7 @@ export default function ProfessionalsPage() {
       }
       toast.success('Profissional atualizado')
     } else {
-      // Create user account via API
+      // Create auth user + business_member + staff_profile via server API (bypasses RLS)
       try {
         const res = await fetch('/api/internal/create-member', {
           method: 'POST',
@@ -199,6 +199,9 @@ export default function ProfessionalsPage() {
             password: form.password,
             name: form.name,
             role: form.role,
+            color: form.color,
+            bio: form.bio || null,
+            sortOrder: staff.length,
           }),
         })
         const data = await res.json()
@@ -207,23 +210,20 @@ export default function ProfessionalsPage() {
           setLoading(false)
           return
         }
-        payload.user_id = data.userId
+
+        // Upload avatar if provided
+        if (avatarFile && data.staffId) {
+          const url = await uploadAvatar(data.staffId)
+          if (url) await supabase.from('staff_profiles').update({ avatar_url: url }).eq('id', data.staffId)
+        }
+
+        setSelectedId(data.staffId)
+        toast.success(`Membro ${form.name} criado! Login: ${form.email}`)
       } catch {
         toast.error('Erro de rede ao criar membro')
         setLoading(false)
         return
       }
-
-      payload.business_id = business.id
-      payload.sort_order = staff.length
-      const { data: newStaff, error } = await supabase.from('staff_profiles').insert(payload).select('id').single()
-      if (error || !newStaff) { toast.error(error?.message || 'Erro'); setLoading(false); return }
-      if (avatarFile) {
-        const url = await uploadAvatar(newStaff.id)
-        if (url) await supabase.from('staff_profiles').update({ avatar_url: url }).eq('id', newStaff.id)
-      }
-      setSelectedId(newStaff.id)
-      toast.success(`Membro ${form.name} criado! Login: ${form.email}`)
     }
 
     setDialogOpen(false)
