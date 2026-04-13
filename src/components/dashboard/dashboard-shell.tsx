@@ -6,15 +6,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
 import type { Business } from '@/types/database'
-import { Button, buttonVariants } from '@/components/ui/button'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { buttonVariants } from '@/components/ui/button'
+import { UserMenu } from '@/components/user-menu'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import {
   CalendarDays,
@@ -23,7 +16,6 @@ import {
   Scissors,
   Clock,
   Settings,
-  LogOut,
   Menu,
   LayoutDashboard,
   UserCircle,
@@ -133,19 +125,6 @@ export function DashboardShell({ user, business, children }: DashboardShellProps
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const displayName = user.user_metadata?.full_name || user.email || 'User'
-  const initials = displayName
-    .split(' ')
-    .map((n: string) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-
-  async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -180,31 +159,7 @@ export function DashboardShell({ user, business, children }: DashboardShellProps
             )}
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger>
-              <div className="flex items-center gap-2.5 rounded-md px-3 py-1.5 hover:bg-muted transition-colors cursor-pointer">
-                <Avatar className="h-8 w-8 border border-border">
-                  <AvatarFallback className="text-xs font-medium bg-accent text-accent-foreground">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="hidden sm:inline text-sm font-medium">
-                  {displayName}
-                </span>
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
-                <Settings className="mr-2 h-4 w-4" />
-                Definições
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Sair
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <UserMenu displayName={displayName} showSettings />
         </header>
 
         {/* Page content */}

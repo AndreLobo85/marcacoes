@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select'
 import { Search, Building2, ArrowRight, UserPlus, Shield, ShieldCheck, Headset, Crown } from 'lucide-react'
 import { toast } from 'sonner'
+import { UserMenu } from '@/components/user-menu'
 
 const ROLE_OPTIONS = [
   { value: 'owner', label: 'Owner', icon: Crown, description: 'Acesso total ao negócio' },
@@ -34,12 +35,15 @@ export default function SelectBusinessPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', role: 'staff', businessId: '' })
   const [creating, setCreating] = useState(false)
+  const [displayName, setDisplayName] = useState('')
   const router = useRouter()
   const supabase = createClient()
 
   const loadData = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
+
+    setDisplayName(user.user_metadata?.full_name || user.email || 'User')
 
     const { data: adminData } = await supabase.from('super_admins').select('id').eq('user_id', user.id).single()
     setIsSuperAdmin(!!adminData)
@@ -136,19 +140,22 @@ export default function SelectBusinessPage() {
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-5">
           <span className="font-serif text-lg font-bold">Marcações</span>
-          {isSuperAdmin && (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => openCreateUser()}>
-                <UserPlus className="h-3.5 w-3.5" />
-                Novo Utilizador
-              </Button>
-              <a href="/admin">
-                <Badge className="bg-accent text-white text-[9px] uppercase tracking-wider gap-1 cursor-pointer">
-                  <Shield className="h-2.5 w-2.5" />Admin
-                </Badge>
-              </a>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {isSuperAdmin && (
+              <>
+                <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => openCreateUser()}>
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Novo Utilizador
+                </Button>
+                <a href="/admin">
+                  <Badge className="bg-accent text-white text-[9px] uppercase tracking-wider gap-1 cursor-pointer">
+                    <Shield className="h-2.5 w-2.5" />Admin
+                  </Badge>
+                </a>
+              </>
+            )}
+            {displayName && <UserMenu displayName={displayName} />}
+          </div>
         </div>
       </header>
 
