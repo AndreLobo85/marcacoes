@@ -104,7 +104,41 @@
   }
 }
 
-/* Gold accent utilities */
+/* ─── Smooth scroll & reduced motion ─── */
+html {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─── Premium transitions (200-300ms ease-out per UX guidelines) ─── */
+a, button, input, select, textarea, [role="button"] {
+  transition: all 0.2s ease-out;
+}
+
+/* ─── Touch targets (min 44x44px per UX guidelines) ─── */
+@media (pointer: coarse) {
+  button, a, [role="button"], input[type="checkbox"], input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* ─── Focus states (visible 3px ring per accessibility guidelines) ─── */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(196, 162, 101, 0.4);
+  border-radius: var(--radius);
+}
+
+/* ─── Gold accent utilities ─── */
 .badge-gold {
   background-color: #C4A265;
   color: #FFFFFF;
@@ -116,6 +150,7 @@
   border-radius: 9999px;
 }
 
+/* ─── Dark card variant ─── */
 .card-dark {
   background-color: #1C1C1C;
   color: #FAF8F5;
@@ -130,7 +165,58 @@
   color: #A8A29E;
 }
 
-/* Timeline dot */
+/* ─── Premium glassmorphism card ─── */
+.card-glass {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(232, 227, 218, 0.5);
+  box-shadow: 0 4px 24px rgba(28, 28, 28, 0.04), 0 1px 2px rgba(28, 28, 28, 0.02);
+}
+
+.card-glass:hover {
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 8px 32px rgba(28, 28, 28, 0.06), 0 2px 4px rgba(28, 28, 28, 0.03);
+}
+
+/* ─── Skeleton loading (premium) ─── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #F0ECE4 25%, #FAF8F5 50%, #F0ECE4 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius);
+}
+
+/* ─── Gold gradient text ─── */
+.text-gold-gradient {
+  background: linear-gradient(135deg, #C4A265, #D4B87A, #A8884E);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Hover lift effect for cards ─── */
+.hover-lift {
+  transition: transform 0.25s ease-out, box-shadow 0.25s ease-out;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(28, 28, 28, 0.08);
+}
+
+/* ─── Active press feedback ─── */
+.press-effect:active {
+  transform: scale(0.97);
+  transition: transform 0.1s ease-out;
+}
+
+/* ─── Timeline ─── */
 .timeline-dot {
   width: 10px;
   height: 10px;
@@ -143,4 +229,21 @@
   width: 2px;
   background-color: #E8E3DA;
   flex-shrink: 0;
+}
+
+/* ─── Subtle divider with gold accent ─── */
+.divider-gold {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #C4A265, transparent);
+  border: none;
+}
+
+/* ─── Status indicator pulse ─── */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-active {
+  animation: pulse-soft 2s ease-in-out infinite;
 }

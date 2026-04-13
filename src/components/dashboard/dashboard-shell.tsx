@@ -68,10 +68,11 @@ function NavContent({ pathname, business }: { pathname: string; business: Busine
   return (
     <div className="flex flex-col h-full">
       {/* Brand */}
-      <div className="px-5 pt-6 pb-2">
+      <div className="px-5 pt-6 pb-3">
         <h2 className="font-serif text-lg font-bold tracking-tight">{business?.name || 'Marcações'}</h2>
-        <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mt-0.5">Premium Tier</p>
+        <p className="text-[10px] uppercase tracking-[0.2em] text-gold mt-0.5 font-semibold">Premium Tier</p>
       </div>
+      <div className="mx-5 divider-gold" />
 
       {/* Search */}
       <div className="px-3 mt-3">
@@ -87,14 +88,15 @@ function NavContent({ pathname, business }: { pathname: string; business: Busine
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-[11px] font-medium tracking-[0.08em] uppercase transition-all',
+                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-[11px] font-medium tracking-[0.08em] uppercase transition-all duration-200 ease-out press-effect',
                 isActive
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  ? 'bg-primary text-primary-foreground shadow-md shadow-primary/10'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground hover:translate-x-0.5'
               )}
             >
-              <item.icon className="h-4 w-4" />
+              <item.icon className={cn('h-4 w-4 transition-transform duration-200', isActive && 'scale-110')} />
               {item.label}
+              {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-accent" />}
             </Link>
           )
         })}
@@ -155,7 +157,7 @@ export function DashboardShell({ user, business, children }: DashboardShellProps
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex h-14 items-center justify-between border-b border-border bg-card px-5">
+        <header className="flex h-14 items-center justify-between border-b border-border/60 bg-card/80 backdrop-blur-sm px-5">
           <div className="flex items-center gap-3">
             {/* Mobile menu */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
