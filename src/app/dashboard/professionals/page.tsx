@@ -55,7 +55,7 @@ export default function ProfessionalsPage() {
       supabase.from('staff_services').select('*'),
       supabase.from('staff_working_hours').select('*').eq('business_id', biz.id).order('day_of_week'),
       supabase.from('booking_assignments').select('staff_id'),
-      supabase.from('business_members').select('user_id, role').eq('business_id', biz.id),
+      supabase.rpc('get_business_member_roles', { p_business_id: biz.id }),
     ])
 
     const staffList = (staffData || []) as StaffProfile[]
