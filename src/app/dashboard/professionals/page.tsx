@@ -293,9 +293,14 @@ export default function ProfessionalsPage() {
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm truncate">{p.name}</p>
-                        <p className="text-[10px] uppercase tracking-wider text-accent font-medium truncate">
-                          {getRoleLabel(p.user_id)}{p.bio ? ` · ${p.bio}` : ''}
-                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="inline-flex items-center text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-accent/10 text-accent whitespace-nowrap">
+                            {getRoleLabel(p.user_id)}
+                          </span>
+                          {p.bio && (
+                            <span className="text-[10px] text-muted-foreground truncate">{p.bio}</span>
+                          )}
+                        </div>
                       </div>
                       <span className={`inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider ${
                         p.is_active ? 'text-emerald-600' : 'text-amber-600'
